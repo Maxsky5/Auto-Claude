@@ -32,6 +32,7 @@ import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
 import { registerMcpHandlers } from './mcp-handlers';
+import { registerBackendHandlers } from './backend-handlers';
 import { notificationService } from '../notification-service';
 
 /**
@@ -114,6 +115,9 @@ export function setupIpcHandlers(
   // MCP server health check handlers
   registerMcpHandlers();
 
+  // Backend availability and OpenCode model handlers
+  registerBackendHandlers();
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -139,5 +143,6 @@ export {
   registerAppUpdateHandlers,
   registerDebugHandlers,
   registerClaudeCodeHandlers,
-  registerMcpHandlers
+  registerMcpHandlers,
+  registerBackendHandlers
 };

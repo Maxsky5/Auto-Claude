@@ -9,7 +9,7 @@ approval or max iterations.
 import time as time_module
 from pathlib import Path
 
-from core.client import create_client
+from core.runtime import create_agent_runtime
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from linear_updater import (
     LinearTaskState,
@@ -59,6 +59,7 @@ async def run_qa_validation_loop(
     spec_dir: Path,
     model: str,
     verbose: bool = False,
+    runtime: str | None = None,
 ) -> bool:
     """
     Run the full QA validation loop.
@@ -79,6 +80,7 @@ async def run_qa_validation_loop(
         spec_dir: Spec directory
         model: Claude model to use
         verbose: Whether to show detailed output
+        backend: Agent runtime to use (claude-code or opencode)
 
     Returns:
         True if QA approved, False otherwise
@@ -137,12 +139,13 @@ async def run_qa_validation_loop(
         qa_model = get_phase_model(spec_dir, "qa", model)
         fixer_thinking_budget = get_phase_thinking_budget(spec_dir, "qa")
 
-        fix_client = create_client(
-            project_dir,
-            spec_dir,
-            qa_model,
+        fix_client = create_agent_runtime(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            model=qa_model,
             agent_type="qa_fixer",
             max_thinking_tokens=fixer_thinking_budget,
+            runtime=runtime or "auto",
         )
 
         async with fix_client:
@@ -220,12 +223,13 @@ async def run_qa_validation_loop(
             model=qa_model,
             thinking_budget=qa_thinking_budget,
         )
-        client = create_client(
-            project_dir,
-            spec_dir,
-            qa_model,
+        client = create_agent_runtime(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            model=qa_model,
             agent_type="qa_reviewer",
             max_thinking_tokens=qa_thinking_budget,
+            runtime=runtime or "auto",
         )
 
         async with client:
@@ -377,12 +381,13 @@ async def run_qa_validation_loop(
             emit_phase(ExecutionPhase.QA_FIXING, "Fixing QA issues")
             print("\nRunning QA Fixer Agent...")
 
-            fix_client = create_client(
-                project_dir,
-                spec_dir,
-                qa_model,
+            fix_client = create_agent_runtime(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                model=qa_model,
                 agent_type="qa_fixer",
                 max_thinking_tokens=fixer_thinking_budget,
+                runtime=runtime or "auto",
             )
 
             async with fix_client:

@@ -15,7 +15,7 @@ import type { BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
-import { IPC_CHANNELS, MODEL_ID_MAP, DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING } from '../../../shared/constants';
+import { IPC_CHANNELS, DEFAULT_FEATURE_MODELS_BY_BACKEND, DEFAULT_FEATURE_THINKING } from '../../../shared/constants';
 import { getGitLabConfig, gitlabFetch, encodeProjectPath } from './utils';
 import { readSettingsFile } from '../../settings-utils';
 import type { Project, AppSettings } from '../../../shared/types';
@@ -143,19 +143,18 @@ function getReviewResult(project: Project, mrIid: number): MRReviewResult | null
  */
 function getGitLabMRSettings(): { model: string; thinkingLevel: string } {
   const rawSettings = readSettingsFile() as Partial<AppSettings> | undefined;
+  const backend = rawSettings?.agentRuntime || 'claude-code';
+  const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND[backend] || DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
 
   // Get feature models/thinking with defaults
-  const featureModels = rawSettings?.featureModels ?? DEFAULT_FEATURE_MODELS;
+  const featureModels = rawSettings?.featureModels ?? defaultFeatureModels;
   const featureThinking = rawSettings?.featureThinking ?? DEFAULT_FEATURE_THINKING;
 
   // Use GitHub PRs settings as fallback (GitLab MRs not yet in settings)
-  const modelShort = featureModels.githubPrs ?? DEFAULT_FEATURE_MODELS.githubPrs;
+  const model = featureModels.githubPrs ?? defaultFeatureModels.githubPrs;
   const thinkingLevel = featureThinking.githubPrs ?? DEFAULT_FEATURE_THINKING.githubPrs;
 
-  // Convert model short name to full model ID
-  const model = MODEL_ID_MAP[modelShort] ?? MODEL_ID_MAP['opus'];
-
-  debugLog('GitLab MR settings', { modelShort, model, thinkingLevel });
+  debugLog('GitLab MR settings', { model, thinkingLevel, backend });
 
   return { model, thinkingLevel };
 }

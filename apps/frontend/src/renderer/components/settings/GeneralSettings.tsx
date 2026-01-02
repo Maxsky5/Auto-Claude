@@ -6,21 +6,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../ui/switch';
 import { SettingsSection } from './SettingsSection';
 import { AgentProfileSettings } from './AgentProfileSettings';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import {
-  AVAILABLE_MODELS,
+  AVAILABLE_MODELS_BY_BACKEND,
   THINKING_LEVELS,
-  DEFAULT_FEATURE_MODELS,
+  DEFAULT_FEATURE_MODELS_BY_BACKEND,
   DEFAULT_FEATURE_THINKING,
-  FEATURE_LABELS
+  FEATURE_LABELS,
+  getRuntimeConfig
 } from '../../../shared/constants';
 import type {
+  AgentRuntime,
   AppSettings,
   FeatureModelConfig,
-  FeatureThinkingConfig,
-  ModelTypeShort,
   ThinkingLevel,
   ToolDetectionResult
 } from '../../../shared/types';
+import {
+  useRuntimeStore,
+  loadRuntimeAvailability,
+  loadRuntimeModels
+} from '../../stores/runtime-store';
 
 interface GeneralSettingsProps {
   settings: AppSettings;
@@ -99,6 +105,21 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
   } | null>(null);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
 
+  const runtimeAvailability = useRuntimeStore((state) => state.availability);
+  const runtimeModels = useRuntimeStore((state) => state.modelsByRuntime);
+
+  useEffect(() => {
+    if (section === 'agent') {
+      loadRuntimeAvailability();
+    }
+  }, [section]);
+
+  useEffect(() => {
+    if (section === 'agent' && settings.agentRuntime) {
+      loadRuntimeModels(settings.agentRuntime);
+    }
+  }, [section, settings.agentRuntime]);
+
   // Fetch CLI tools detection info when component mounts (paths section only)
   useEffect(() => {
     if (section === 'paths') {
@@ -122,8 +143,51 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
   if (section === 'agent') {
     return (
       <div className="space-y-8">
+        {/* Agent Runtime Selection - Primary choice at the top */}
+        <SettingsSection
+          title={t('general.runtimeSection')}
+          description={t('general.runtimeSectionDescription')}
+        >
+          <div className="space-y-3">
+            <Select
+              value={settings.agentRuntime || 'claude-code'}
+              onValueChange={(value) => onSettingsChange({ ...settings, agentRuntime: value as AgentRuntime })}
+            >
+              <SelectTrigger id="agentRuntime" className="w-full max-w-md">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="claude-code" disabled={runtimeAvailability ? !runtimeAvailability['claude-code'] : false}>
+                  <div className="flex items-center gap-2">
+                    <span>{t('general.agentRuntimeClaudeCode')}</span>
+                    {runtimeAvailability && (
+                      runtimeAvailability['claude-code'] ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )
+                    )}
+                  </div>
+                </SelectItem>
+                <SelectItem value="opencode" disabled={runtimeAvailability ? !runtimeAvailability.opencode : false}>
+                  <div className="flex items-center gap-2">
+                    <span>{t('general.agentRuntimeOpenCode')}</span>
+                    {runtimeAvailability && (
+                      runtimeAvailability.opencode ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )
+                    )}
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </SettingsSection>
+
         {/* Agent Profile Selection */}
-        <AgentProfileSettings />
+        <AgentProfileSettings settings={settings} onSettingsChange={onSettingsChange} />
 
         {/* Other Agent Settings */}
         <SettingsSection
@@ -174,8 +238,17 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
               </div>
 
               {(Object.keys(FEATURE_LABELS) as Array<keyof FeatureModelConfig>).map((feature) => {
-                const featureModels = settings.featureModels || DEFAULT_FEATURE_MODELS;
+                const runtime = settings.agentRuntime || 'claude-code';
+                const runtimeConfig = getRuntimeConfig(runtime);
+                const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND[runtime] || DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
+                const featureModelsConfig = settings.featureModels || defaultFeatureModels;
                 const featureThinking = settings.featureThinking || DEFAULT_FEATURE_THINKING;
+
+                const cachedModels = runtimeModels[runtime] || [];
+                const currentModelOptions = runtimeConfig.hasDynamicModels && cachedModels.length > 0
+                  ? cachedModels.map((m) => ({ value: m.id, label: m.name }))
+                  : [...AVAILABLE_MODELS_BY_BACKEND[runtime as keyof typeof AVAILABLE_MODELS_BY_BACKEND] || AVAILABLE_MODELS_BY_BACKEND['claude-code']];
+                const showThinking = runtimeConfig.supportsThinking;
 
                 return (
                   <div key={feature} className="space-y-2">
@@ -187,14 +260,13 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                         {FEATURE_LABELS[feature].description}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 max-w-md">
-                      {/* Model Select */}
+                    <div className={`grid ${showThinking ? 'grid-cols-2' : 'grid-cols-1'} gap-3 max-w-md`}>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">{t('general.model')}</Label>
                         <Select
-                          value={featureModels[feature]}
+                          value={featureModelsConfig[feature]}
                           onValueChange={(value) => {
-                            const newFeatureModels = { ...featureModels, [feature]: value as ModelTypeShort };
+                            const newFeatureModels = { ...featureModelsConfig, [feature]: value };
                             onSettingsChange({ ...settings, featureModels: newFeatureModels });
                           }}
                         >
@@ -202,7 +274,7 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {AVAILABLE_MODELS.map((m) => (
+                            {currentModelOptions.map((m) => (
                               <SelectItem key={m.value} value={m.value}>
                                 {m.label}
                               </SelectItem>
@@ -210,28 +282,29 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                           </SelectContent>
                         </Select>
                       </div>
-                      {/* Thinking Level Select */}
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t('general.thinkingLevel')}</Label>
-                        <Select
-                          value={featureThinking[feature]}
-                          onValueChange={(value) => {
-                            const newFeatureThinking = { ...featureThinking, [feature]: value as ThinkingLevel };
-                            onSettingsChange({ ...settings, featureThinking: newFeatureThinking });
-                          }}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {THINKING_LEVELS.map((level) => (
-                              <SelectItem key={level.value} value={level.value}>
-                                {level.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {showThinking && (
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">{t('general.thinkingLevel')}</Label>
+                          <Select
+                            value={featureThinking[feature]}
+                            onValueChange={(value) => {
+                              const newFeatureThinking = { ...featureThinking, [feature]: value as ThinkingLevel };
+                              onSettingsChange({ ...settings, featureThinking: newFeatureThinking });
+                            }}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {THINKING_LEVELS.map((level) => (
+                                <SelectItem key={level.value} value={level.value}>
+                                  {level.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

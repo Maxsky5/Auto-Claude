@@ -35,6 +35,8 @@ credentials/
 .project
 .classpath
 .settings/
+*.iml
+backend/
 
 # ===========================
 # Logs

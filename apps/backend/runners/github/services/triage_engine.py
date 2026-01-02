@@ -61,7 +61,7 @@ class TriageEngine:
         self, issue: dict, all_issues: list[dict]
     ) -> TriageResult:
         """Triage a single issue using AI."""
-        from core.client import create_client
+        from core.runtime import create_agent_runtime
 
         # Build context with issue and potential duplicates
         context = self.build_triage_context(issue, all_issues)
@@ -71,7 +71,7 @@ class TriageEngine:
         full_prompt = prompt + "\n\n---\n\n" + context
 
         # Run AI
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=self.project_dir,
             spec_dir=self.github_dir,
             model=self.config.model,

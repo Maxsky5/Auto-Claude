@@ -52,14 +52,14 @@ import type { ProjectEnvConfig, AgentMcpOverrides, AgentMcpOverride, CustomMcpSe
 import { CustomMcpDialog } from './CustomMcpDialog';
 import { useTranslation } from 'react-i18next';
 import {
-  DEFAULT_PHASE_MODELS,
+  DEFAULT_PHASE_MODELS_BY_BACKEND,
+  DEFAULT_FEATURE_MODELS_BY_BACKEND,
   DEFAULT_PHASE_THINKING,
-  DEFAULT_FEATURE_MODELS,
   DEFAULT_FEATURE_THINKING,
-  AVAILABLE_MODELS,
   THINKING_LEVELS
 } from '../../shared/constants/models';
-import type { ModelTypeShort, ThinkingLevel } from '../../shared/types/settings';
+import { useAvailableModels } from '../hooks/useAvailableModels';
+import type { ThinkingLevel } from '../../shared/types/settings';
 
 // Agent configuration data - mirrors AGENT_CONFIGS from backend
 // Model and thinking are now dynamically read from user settings
@@ -79,15 +79,9 @@ interface AgentConfig {
     feature: 'insights' | 'ideation' | 'roadmap' | 'githubIssues' | 'githubPrs' | 'utility';
   } | {
     type: 'fixed';  // For agents not yet configurable
-    model: ModelTypeShort;
+    model: string;
     thinking: ThinkingLevel;
   };
-}
-
-// Helper to get model label from short name
-function getModelLabel(modelShort: ModelTypeShort): string {
-  const model = AVAILABLE_MODELS.find(m => m.value === modelShort);
-  return model?.label.replace('Claude ', '') || modelShort;
 }
 
 // Helper to get thinking label from level
@@ -646,9 +640,15 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
 export function AgentTools() {
   const { t } = useTranslation(['settings']);
   const settings = useSettingsStore((state) => state.settings);
+  const { models: availableModels } = useAvailableModels(settings);
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
+
+  const getModelLabel = (modelShort: string): string => {
+    const model = availableModels.find(m => m.value === modelShort);
+    return model?.label.replace('Claude ', '') || modelShort;
+  };
 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(['spec', 'build', 'qa'])
@@ -972,9 +972,13 @@ export function AgentTools() {
   }, []);
 
   // Get phase and feature settings with defaults
-  const phaseModels = settings.customPhaseModels || DEFAULT_PHASE_MODELS;
+  const backend = settings.agentRuntime || 'claude-code';
+  const defaultPhaseModels = DEFAULT_PHASE_MODELS_BY_BACKEND[backend] || DEFAULT_PHASE_MODELS_BY_BACKEND['claude-code'];
+  const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND[backend] || DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
+
+  const phaseModels = settings.customPhaseModels || defaultPhaseModels;
   const phaseThinking = settings.customPhaseThinking || DEFAULT_PHASE_THINKING;
-  const featureModels = settings.featureModels || DEFAULT_FEATURE_MODELS;
+  const featureModels = settings.featureModels || defaultFeatureModels;
   const featureThinking = settings.featureThinking || DEFAULT_FEATURE_THINKING;
 
   // Get MCP server states for display
@@ -992,7 +996,7 @@ export function AgentTools() {
 
   // Resolve model and thinking for an agent based on its settings source
   const resolveAgentSettings = useMemo(() => {
-    return (config: AgentConfig): { model: ModelTypeShort; thinking: ThinkingLevel } => {
+    return (config: AgentConfig): { model: string; thinking: ThinkingLevel } => {
       const source = config.settingsSource;
 
       if (source.type === 'phase') {

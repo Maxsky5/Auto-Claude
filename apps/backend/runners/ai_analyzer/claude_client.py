@@ -6,12 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-try:
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
-
-    CLAUDE_SDK_AVAILABLE = True
-except ImportError:
-    CLAUDE_SDK_AVAILABLE = False
+from core.runtime import create_agent_runtime, AgentRuntimeBase, BlockType
 
 
 class ClaudeAnalysisClient:
@@ -28,11 +23,6 @@ class ClaudeAnalysisClient:
         Args:
             project_dir: Root directory of project being analyzed
         """
-        if not CLAUDE_SDK_AVAILABLE:
-            raise RuntimeError(
-                "claude-agent-sdk not available. Install with: pip install claude-agent-sdk"
-            )
-
         self.project_dir = project_dir
         self._validate_oauth_token()
 
@@ -52,54 +42,19 @@ class ClaudeAnalysisClient:
         Returns:
             Claude's response text
         """
-        settings_file = self._create_settings_file()
+        # Security settings are handled by create_agent_runtime
+        client = self._create_client()
 
-        try:
-            client = self._create_client(settings_file)
+        async with client:
+            await client.query(prompt)
+            return await self._collect_response(client)
 
-            async with client:
-                await client.query(prompt)
-                return await self._collect_response(client)
-
-        finally:
-            # Cleanup settings file
-            if settings_file.exists():
-                settings_file.unlink()
-
-    def _create_settings_file(self) -> Path:
+    def _create_client(self) -> AgentRuntimeBase:
         """
-        Create temporary security settings file.
+        Create configured agent backend.
 
         Returns:
-            Path to settings file
-        """
-        settings = {
-            "sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True},
-            "permissions": {
-                "defaultMode": "acceptEdits",
-                "allow": [
-                    "Read(./**)",
-                    "Glob(./**)",
-                    "Grep(./**)",
-                ],
-            },
-        }
-
-        settings_file = self.project_dir / ".claude_ai_analyzer_settings.json"
-        with open(settings_file, "w") as f:
-            json.dump(settings, f, indent=2)
-
-        return settings_file
-
-    def _create_client(self, settings_file: Path) -> Any:
-        """
-        Create configured Claude SDK client.
-
-        Args:
-            settings_file: Path to security settings file
-
-        Returns:
-            ClaudeSDKClient instance
+            AgentRuntimeBase instance
         """
         system_prompt = (
             f"You are a senior software architect analyzing this codebase. "
@@ -108,23 +63,24 @@ class ClaudeAnalysisClient:
             f"Output your analysis as valid JSON only."
         )
 
-        return ClaudeSDKClient(
-            options=ClaudeAgentOptions(
-                model=self.DEFAULT_MODEL,
-                system_prompt=system_prompt,
-                allowed_tools=self.ALLOWED_TOOLS,
-                max_turns=self.MAX_TURNS,
-                cwd=str(self.project_dir.resolve()),
-                settings=str(settings_file.resolve()),
-            )
+        # Create backend using unified factory
+        # This automatically handles security settings, MCPs, etc.
+        return create_agent_runtime(
+            project_dir=self.project_dir,
+            spec_dir=self.project_dir,  # Use project dir as spec dir for analysis
+            model=self.DEFAULT_MODEL,
+            agent_type="coder",  # Use coder permissions for full access
+            system_prompt=system_prompt,
+            allowed_tools=self.ALLOWED_TOOLS,
+            max_turns=self.MAX_TURNS,
         )
 
-    async def _collect_response(self, client: Any) -> str:
+    async def _collect_response(self, client: AgentRuntimeBase) -> str:
         """
         Collect text response from Claude client.
 
         Args:
-            client: ClaudeSDKClient instance
+            client: AgentRuntimeBase instance
 
         Returns:
             Collected response text
@@ -134,9 +90,9 @@ class ClaudeAnalysisClient:
         async for msg in client.receive_response():
             msg_type = type(msg).__name__
 
-            if msg_type == "AssistantMessage":
-                for content in msg.content:
-                    if hasattr(content, "text"):
-                        response_text += content.text
+            if msg_type == "AgentMessage":
+                for block in msg.content:
+                    if block.type == BlockType.TEXT and block.text:
+                        response_text += block.text
 
         return response_text

@@ -48,7 +48,9 @@ export const DEFAULT_APP_SETTINGS = {
   // Beta updates opt-in (receive pre-release versions)
   betaUpdates: false,
   // Language preference (default to English)
-  language: 'en' as const
+  language: 'en' as const,
+  // Agent runtime selection (claude-code is default, opencode is alternative)
+  agentRuntime: 'claude-code' as const
 };
 
 // ============================================

@@ -32,6 +32,7 @@ except ImportError:
     ClaudeSDKClient = None
 
 from core.auth import ensure_claude_code_oauth_token, get_auth_token
+from core.runtime import DEFAULT_RUNTIME, create_agent_runtime
 from debug import (
     debug,
     debug_detailed,
@@ -134,6 +135,7 @@ async def run_with_sdk(
     history: list,
     model: str = "claude-sonnet-4-5-20250929",
     thinking_level: str = "medium",
+    runtime: str | None = None,
 ) -> None:
     """Run the chat using Claude SDK with streaming."""
     if not SDK_AVAILABLE:
@@ -141,16 +143,19 @@ async def run_with_sdk(
         run_simple(project_dir, message, history)
         return
 
-    if not get_auth_token():
-        print(
-            "No authentication token found, falling back to simple mode",
-            file=sys.stderr,
-        )
-        run_simple(project_dir, message, history)
-        return
+    # Check auth only if using Claude Code runtime
+    is_opencode = runtime == "opencode"
+    if not is_opencode:
+        if not get_auth_token():
+            print(
+                "No authentication token found, falling back to simple mode",
+                file=sys.stderr,
+            )
+            run_simple(project_dir, message, history)
+            return
 
-    # Ensure SDK can find the token
-    ensure_claude_code_oauth_token()
+        # Ensure SDK can find the token
+        ensure_claude_code_oauth_token()
 
     system_prompt = build_system_prompt(project_dir)
     project_path = Path(project_dir).resolve()
@@ -177,82 +182,83 @@ Current question: {message}"""
     )
 
     try:
-        # Create Claude SDK client with appropriate settings for insights
-        client = ClaudeSDKClient(
-            options=ClaudeAgentOptions(
-                model=model,  # Use configured model
-                system_prompt=system_prompt,
-                allowed_tools=[
-                    "Read",
-                    "Glob",
-                    "Grep",
-                ],
-                max_turns=30,  # Allow sufficient turns for codebase exploration
-                cwd=str(project_path),
+        debug("insights_runner", "Creating client backend...")
+        # Create client or backend using unified factory
+        try:
+            client = create_agent_runtime(
+                project_dir=project_path,
+                spec_dir=project_path,  # Use project path as spec dir for insights
+                model=model,
+                agent_type="coder",  # Use coder permissions for insights (broad access)
+                max_thinking_tokens=None,  # Configured via model parameter usually
+                runtime=runtime or DEFAULT_RUNTIME,
             )
-        )
+            debug("insights_runner", "Client created", runtime=runtime)
+        except Exception as e:
+            print(
+                f"[ERROR] insights_runner: Failed to create backend: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
+            import traceback
+
+            traceback.print_exc(file=sys.stderr)
+            raise
 
         # Use async context manager pattern
         async with client:
+            debug("insights_runner", "Sending query...")
             # Send the query
             await client.query(full_prompt)
+            debug("insights_runner", "Query sent, waiting for response...")
 
             # Stream the response
             response_text = ""
-            current_tool = None
+            current_tool = ""
 
             async for msg in client.receive_response():
                 msg_type = type(msg).__name__
                 debug_detailed("insights_runner", "Received message", msg_type=msg_type)
 
-                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                if msg_type == "AgentMessage":
+                    from core.runtime import BlockType
+
+                    # AgentMessage type handling (for unified backend)
                     for block in msg.content:
-                        block_type = type(block).__name__
-                        debug_detailed(
-                            "insights_runner", "Processing block", block_type=block_type
-                        )
-                        if block_type == "TextBlock" and hasattr(block, "text"):
-                            text = block.text
+                        if block.type == BlockType.TEXT and block.text:
                             debug_detailed(
-                                "insights_runner", "Text block", text_length=len(text)
+                                "insights_runner",
+                                "Text block",
+                                text_length=len(block.text),
                             )
-                            # Print text with newline to ensure proper line separation for parsing
-                            print(text, flush=True)
-                            response_text += text
-                        elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                            # Emit tool start marker for UI feedback
-                            tool_name = block.name
+                            print(block.text, flush=True)
+                            response_text += block.text
+                        elif block.type == BlockType.TOOL_USE:
+                            tool_name = block.tool_name or "unknown"
                             tool_input = ""
-
-                            # Extract a brief description of what the tool is doing
-                            if hasattr(block, "input") and block.input:
-                                inp = block.input
-                                if isinstance(inp, dict):
-                                    if "pattern" in inp:
-                                        tool_input = f"pattern: {inp['pattern']}"
-                                    elif "file_path" in inp:
-                                        # Shorten path for display
-                                        fp = inp["file_path"]
-                                        if len(fp) > 50:
-                                            fp = "..." + fp[-47:]
-                                        tool_input = fp
-                                    elif "path" in inp:
-                                        tool_input = inp["path"]
-
+                            if block.tool_input and isinstance(block.tool_input, dict):
+                                inp = block.tool_input
+                                if "pattern" in inp:
+                                    tool_input = f"pattern: {inp['pattern']}"
+                                elif "file_path" in inp:
+                                    fp = inp["file_path"]
+                                    if len(fp) > 50:
+                                        fp = "..." + fp[-47:]
+                                    tool_input = fp
+                                elif "path" in inp:
+                                    tool_input = inp["path"]
                             current_tool = tool_name
                             print(
                                 f"__TOOL_START__:{json.dumps({'name': tool_name, 'input': tool_input})}",
                                 flush=True,
                             )
-
-                elif msg_type == "ToolResult":
-                    # Tool finished executing
-                    if current_tool:
-                        print(
-                            f"__TOOL_END__:{json.dumps({'name': current_tool})}",
-                            flush=True,
-                        )
-                        current_tool = None
+                        elif block.type == BlockType.TOOL_RESULT:
+                            if current_tool:
+                                print(
+                                    f"__TOOL_END__:{json.dumps({'name': current_tool})}",
+                                    flush=True,
+                                )
+                                current_tool = ""
 
             # Ensure we have a newline at the end
             if response_text and not response_text.endswith("\n"):
@@ -265,11 +271,21 @@ Current question: {message}"""
             )
 
     except Exception as e:
-        print(f"Error using Claude SDK: {e}", file=sys.stderr)
+        print(f"Error using agent backend: {e}", file=sys.stderr)
         import traceback
 
         traceback.print_exc(file=sys.stderr)
-        run_simple(project_dir, message, history)
+
+        # Only fallback to simple mode (Claude CLI) if we were trying to use Claude Code
+        # If we were using OpenCode and it failed, falling back to Claude CLI is unexpected/confusing
+        if runtime != "opencode":
+            run_simple(project_dir, message, history)
+        else:
+            print(
+                "OpenCode execution failed. Please check if 'opencode' CLI is installed and configured.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
 
 def run_simple(project_dir: str, message: str, history: list) -> None:
@@ -345,6 +361,13 @@ def main():
         choices=["none", "low", "medium", "high", "ultrathink"],
         help="Thinking level for extended reasoning (default: medium)",
     )
+    parser.add_argument(
+        "--runtime",
+        type=str,
+        default=DEFAULT_RUNTIME,
+        choices=["claude-code", "opencode"],
+        help=f"Agent runtime to use (default: {DEFAULT_RUNTIME})",
+    )
     args = parser.parse_args()
 
     debug_section("insights_runner", "Starting Insights Chat")
@@ -353,6 +376,7 @@ def main():
     user_message = args.message
     model = args.model
     thinking_level = args.thinking_level
+    runtime = args.runtime
 
     debug(
         "insights_runner",
@@ -361,6 +385,7 @@ def main():
         message_length=len(user_message),
         model=model,
         thinking_level=thinking_level,
+        runtime=runtime,
     )
 
     # Load history from file if provided, otherwise parse inline JSON
@@ -387,7 +412,11 @@ def main():
 
     # Run the async SDK function
     debug("insights_runner", "Running SDK query")
-    asyncio.run(run_with_sdk(project_dir, user_message, history, model, thinking_level))
+    asyncio.run(
+        run_with_sdk(
+            project_dir, user_message, history, model, thinking_level, runtime=runtime
+        )
+    )
     debug_success("insights_runner", "Query completed")
 
 

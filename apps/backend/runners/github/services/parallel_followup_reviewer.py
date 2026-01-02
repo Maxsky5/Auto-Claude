@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 from claude_agent_sdk import AgentDefinition
 
 try:
-    from ...core.client import create_client
+    from ...core.runtime import create_agent_runtime
     from ...phase_config import get_thinking_budget
     from ..models import (
         GitHubRunnerConfig,
@@ -43,7 +43,7 @@ try:
     from .pydantic_models import ParallelFollowupResponse
     from .sdk_utils import process_sdk_stream
 except (ImportError, ValueError, SystemError):
-    from core.client import create_client
+    from core.runtime import create_agent_runtime
     from models import (
         GitHubRunnerConfig,
         MergeVerdict,
@@ -355,7 +355,7 @@ The SDK will run invoked agents in parallel automatically.
             )
 
             # Create client with subagents defined
-            client = create_client(
+            client = create_agent_runtime(
                 project_dir=project_root,
                 spec_dir=self.github_dir,
                 model=model,

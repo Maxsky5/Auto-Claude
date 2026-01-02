@@ -3,7 +3,7 @@ import { existsSync, writeFileSync, mkdirSync, statSync } from 'fs';
 import { execFileSync } from 'node:child_process';
 import path from 'path';
 import { is } from '@electron-toolkit/utils';
-import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, DEFAULT_AGENT_PROFILES } from '../../shared/constants';
+import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, AGENT_PROFILES_BY_BACKEND } from '../../shared/constants';
 import type {
   AppSettings,
   IPCResult
@@ -115,7 +115,9 @@ export function registerSettingsHandlers(
       // Fixes bug where defaultModel was stuck at 'opus' regardless of profile selection
       if (!settings._migratedDefaultModelSync) {
         if (settings.selectedAgentProfile) {
-          const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === settings.selectedAgentProfile);
+          const backend = settings.agentRuntime || 'claude-code';
+          const profiles = AGENT_PROFILES_BY_BACKEND[backend] || AGENT_PROFILES_BY_BACKEND['claude-code'];
+          const profile = profiles.find(p => p.id === settings.selectedAgentProfile);
           if (profile) {
             settings.defaultModel = profile.model;
           }
@@ -165,7 +167,9 @@ export function registerSettingsHandlers(
 
         // Sync defaultModel when agent profile changes (#414)
         if (settings.selectedAgentProfile) {
-          const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === settings.selectedAgentProfile);
+          const backend = newSettings.agentRuntime || 'claude-code';
+          const profiles = AGENT_PROFILES_BY_BACKEND[backend] || AGENT_PROFILES_BY_BACKEND['claude-code'];
+          const profile = profiles.find(p => p.id === settings.selectedAgentProfile);
           if (profile) {
             newSettings.defaultModel = profile.model;
           }

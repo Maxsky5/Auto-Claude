@@ -123,7 +123,7 @@ class PRReviewEngine:
         context: PRContext,
     ) -> dict | list[PRReviewFinding]:
         """Run a single review pass and return findings or scan result."""
-        from core.client import create_client
+        from core.runtime import create_agent_runtime
 
         pass_prompt = self.prompt_manager.get_review_pass_prompt(review_pass)
 
@@ -226,11 +226,11 @@ class PRReviewEngine:
             else self.project_dir
         )
 
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=project_root,
             spec_dir=self.github_dir,
             model=self.config.model,
-            agent_type="pr_reviewer",  # Read-only - no bash, no edits
+            agent_type="pr_reviewer",
         )
 
         result_text = ""
@@ -463,7 +463,7 @@ class PRReviewEngine:
 
     async def _run_structural_pass(self, context: PRContext) -> str:
         """Run the structural review pass."""
-        from core.client import create_client
+        from core.runtime import create_agent_runtime
 
         # Load the structural prompt file
         prompt_file = (
@@ -487,11 +487,11 @@ class PRReviewEngine:
             else self.project_dir
         )
 
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=project_root,
             spec_dir=self.github_dir,
             model=self.config.model,
-            agent_type="pr_reviewer",  # Read-only - no bash, no edits
+            agent_type="pr_reviewer",
         )
 
         result_text = ""
@@ -511,7 +511,7 @@ class PRReviewEngine:
 
     async def _run_ai_triage_pass(self, context: PRContext) -> str:
         """Run the AI comment triage pass."""
-        from core.client import create_client
+        from core.runtime import create_agent_runtime
 
         if not context.ai_bot_comments:
             return "[]"
@@ -543,11 +543,11 @@ class PRReviewEngine:
             else self.project_dir
         )
 
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=project_root,
             spec_dir=self.github_dir,
             model=self.config.model,
-            agent_type="pr_reviewer",  # Read-only - no bash, no edits
+            agent_type="pr_reviewer",
         )
 
         result_text = ""

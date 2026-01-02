@@ -14,7 +14,9 @@ import type {
   Task,
   ImplementationPlan,
   GitBranchInfo,
-  GitTagInfo
+  GitTagInfo,
+  AgentRuntime,
+  AppSettings
 } from '../../shared/types';
 import { ChangelogGenerator } from './generator';
 import { VersionSuggester } from './version-suggester';
@@ -29,6 +31,7 @@ import {
 } from './git-integration';
 import { getValidatedPythonPath } from '../python-detector';
 import { getConfiguredPythonPath } from '../python-env-manager';
+import { readSettingsFile } from '../settings-utils';
 
 /**
  * Main changelog service - orchestrates all changelog operations
@@ -170,6 +173,11 @@ export class ChangelogService extends EventEmitter {
     }
   }
 
+  private getRuntime(): AgentRuntime {
+    const settings = readSettingsFile() as AppSettings | undefined;
+    return settings?.agentRuntime || 'claude-code';
+  }
+
   /**
    * Get or create the generator instance
    */
@@ -192,7 +200,8 @@ export class ChangelogService extends EventEmitter {
         this.claudePath,
         autoBuildSource,
         autoBuildEnv,
-        this.isDebugEnabled()
+        this.isDebugEnabled(),
+        this.getRuntime()
       );
 
       // Forward events from generator
@@ -235,7 +244,8 @@ export class ChangelogService extends EventEmitter {
         this.pythonPath,
         this.claudePath,
         autoBuildSource,
-        this.isDebugEnabled()
+        this.isDebugEnabled(),
+        this.getRuntime()
       );
     }
 

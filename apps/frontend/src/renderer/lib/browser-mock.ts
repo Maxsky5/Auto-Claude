@@ -228,7 +228,16 @@ const browserMockAPI: ElectronAPI = {
   openLogsFolder: async () => ({ success: false, error: 'Not available in browser mode' }),
   copyDebugInfo: async () => ({ success: false, error: 'Not available in browser mode' }),
   getRecentErrors: async () => [],
-  listLogFiles: async () => []
+  listLogFiles: async () => [],
+
+  getAvailableRuntimes: async () => ({
+    success: true,
+    data: { 'claude-code': true, opencode: false }
+  }),
+  getRuntimeModels: async () => ({
+    success: true,
+    data: []
+  })
 };
 
 /**

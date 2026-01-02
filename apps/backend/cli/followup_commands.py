@@ -221,6 +221,7 @@ def handle_followup_command(
     spec_dir: Path,
     model: str,
     verbose: bool = False,
+    runtime: str | None = None,
 ) -> None:
     """
     Handle the --followup command.
@@ -230,6 +231,7 @@ def handle_followup_command(
         spec_dir: Spec directory path
         model: Model to use
         verbose: Enable verbose output
+        backend: Agent runtime to use (claude-code or opencode)
     """
     # Lazy imports to avoid loading heavy modules
     from agent import run_followup_planner
@@ -335,6 +337,7 @@ def handle_followup_command(
                 spec_dir=spec_dir,
                 model=model,
                 verbose=verbose,
+                runtime=runtime,
             )
         )
 

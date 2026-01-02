@@ -4,22 +4,70 @@
  */
 
 import type { AgentProfile, PhaseModelConfig, FeatureModelConfig, FeatureThinkingConfig } from '../types/settings';
+import type { AgentRuntime } from '../types';
+
+// ============================================
+// Runtime Configuration
+// ============================================
+
+export interface RuntimeConfig {
+  id: AgentRuntime;
+  name: string;
+  hasDynamicModels: boolean;      // true = fetch models from API, false = use static list
+  supportsThinking: boolean;      // true = show thinking level selector in UI
+  requiresAuth: boolean;          // true = requires authentication before running tasks
+  modelPrefix: string;            // prefix for model IDs (e.g., 'anthropic/' for OpenCode)
+  fastModel: string;              // fast model for quick tasks (terminal naming, utilities)
+}
+
+export const RUNTIME_CONFIGS: Record<AgentRuntime, RuntimeConfig> = {
+  'claude-code': {
+    id: 'claude-code',
+    name: 'Claude Code',
+    hasDynamicModels: false,
+    supportsThinking: true,
+    requiresAuth: true,
+    modelPrefix: '',
+    fastModel: 'claude-haiku-4-5',
+  },
+  opencode: {
+    id: 'opencode',
+    name: 'OpenCode',
+    hasDynamicModels: true,
+    supportsThinking: false,
+    requiresAuth: false,
+    modelPrefix: 'anthropic/',
+    fastModel: 'opencode/grok-code',
+  },
+};
+
+export function getRuntimeConfig(runtime: AgentRuntime): RuntimeConfig {
+  return RUNTIME_CONFIGS[runtime] || RUNTIME_CONFIGS['claude-code'];
+}
 
 // ============================================
 // Available Models
 // ============================================
 
-export const AVAILABLE_MODELS = [
-  { value: 'opus', label: 'Claude Opus 4.5' },
-  { value: 'sonnet', label: 'Claude Sonnet 4.5' },
-  { value: 'haiku', label: 'Claude Haiku 4.5' }
+// Claude Code backend models
+export const CLAUDE_CODE_AVAILABLE_MODELS = [
+  { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5' },
+  { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' }
 ] as const;
 
-// Maps model shorthand to actual Claude model IDs
-export const MODEL_ID_MAP: Record<string, string> = {
-  opus: 'claude-opus-4-5-20251101',
-  sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001'
+// OpenCode backend default models (free tier)
+export const OPENCODE_AVAILABLE_MODELS = [
+  { value: 'opencode/big-pickle', label: 'Big Pickle' },
+  { value: 'opencode/grok-code', label: 'Grok Code' },
+  { value: 'opencode/glm-4.7-free', label: 'GLM 4.7 Free' },
+  { value: 'opencode/gpt-5-nano', label: 'GPT-5 Nano' },
+  { value: 'opencode/minimax-m2.1-free', label: 'MiniMax M2.1 Free' }
+] as const;
+
+export const AVAILABLE_MODELS_BY_BACKEND = {
+  'claude-code': CLAUDE_CODE_AVAILABLE_MODELS,
+  'opencode': OPENCODE_AVAILABLE_MODELS
 } as const;
 
 // Maps thinking levels to budget tokens (null = no extended thinking)
@@ -50,11 +98,24 @@ export const THINKING_LEVELS = [
 
 // Default phase model configuration for Auto profile
 // Uses Opus across all phases for maximum quality
-export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
-  spec: 'opus',       // Best quality for spec creation
-  planning: 'opus',   // Complex architecture decisions benefit from Opus
-  coding: 'opus',     // Highest quality implementation
-  qa: 'opus'          // Thorough QA review
+export const CLAUDE_CODE_DEFAULT_PHASE_MODELS: PhaseModelConfig = {
+  spec: 'claude-opus-4-5-20251101',       // Best quality for spec creation
+  planning: 'claude-opus-4-5-20251101',   // Complex architecture decisions benefit from Opus
+  coding: 'claude-opus-4-5-20251101',     // Highest quality implementation
+  qa: 'claude-opus-4-5-20251101'          // Thorough QA review
+};
+
+// OpenCode default phase models (using free tier models)
+export const OPENCODE_DEFAULT_PHASE_MODELS: PhaseModelConfig = {
+  spec: 'opencode/big-pickle',
+  planning: 'opencode/big-pickle',
+  coding: 'opencode/grok-code',
+  qa: 'opencode/glm-4.7-free'
+};
+
+export const DEFAULT_PHASE_MODELS_BY_BACKEND: Record<string, PhaseModelConfig> = {
+  'claude-code': CLAUDE_CODE_DEFAULT_PHASE_MODELS,
+  'opencode': OPENCODE_DEFAULT_PHASE_MODELS
 };
 
 // Default phase thinking configuration for Auto profile
@@ -70,13 +131,28 @@ export const DEFAULT_PHASE_THINKING: import('../types/settings').PhaseThinkingCo
 // ============================================
 
 // Default feature model configuration (for insights, ideation, roadmap, github, utility)
-export const DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
-  insights: 'sonnet',     // Fast, responsive chat
-  ideation: 'opus',       // Creative ideation benefits from Opus
-  roadmap: 'opus',        // Strategic planning benefits from Opus
-  githubIssues: 'opus',   // Issue triage and analysis benefits from Opus
-  githubPrs: 'opus',      // PR review benefits from thorough Opus analysis
-  utility: 'haiku'        // Fast utility operations (commit messages, merge resolution)
+export const CLAUDE_CODE_DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
+  insights: 'claude-sonnet-4-5-20250929',     // Fast, responsive chat
+  ideation: 'claude-opus-4-5-20251101',       // Creative ideation benefits from Opus
+  roadmap: 'claude-opus-4-5-20251101',        // Strategic planning benefits from Opus
+  githubIssues: 'claude-opus-4-5-20251101',   // Issue triage and analysis benefits from Opus
+  githubPrs: 'claude-opus-4-5-20251101',      // PR review benefits from thorough Opus analysis
+  utility: 'claude-haiku-4-5-20251001'        // Fast utility operations (commit messages, merge resolution)
+};
+
+// OpenCode default feature models (using free tier models)
+export const OPENCODE_DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
+  insights: 'opencode/glm-4.7-free',
+  ideation: 'opencode/big-pickle',
+  roadmap: 'opencode/big-pickle',
+  githubIssues: 'opencode/grok-code',
+  githubPrs: 'opencode/grok-code',
+  utility: 'opencode/gpt-5-nano'
+};
+
+export const DEFAULT_FEATURE_MODELS_BY_BACKEND: Record<string, FeatureModelConfig> = {
+  'claude-code': CLAUDE_CODE_DEFAULT_FEATURE_MODELS,
+  'opencode': OPENCODE_DEFAULT_FEATURE_MODELS
 };
 
 // Default feature thinking configuration
@@ -100,23 +176,23 @@ export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; d
 };
 
 // Default agent profiles for preset model/thinking configurations
-export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
+export const CLAUDE_CODE_AGENT_PROFILES: AgentProfile[] = [
   {
     id: 'auto',
     name: 'Auto (Optimized)',
     description: 'Uses Opus across all phases with optimized thinking levels',
-    model: 'opus',  // Fallback/default model
+    model: 'claude-opus-4-5-20251101',  // Fallback/default model
     thinkingLevel: 'high',
     icon: 'Sparkles',
     isAutoProfile: true,
-    phaseModels: DEFAULT_PHASE_MODELS,
+    phaseModels: CLAUDE_CODE_DEFAULT_PHASE_MODELS,
     phaseThinking: DEFAULT_PHASE_THINKING
   },
   {
     id: 'complex',
     name: 'Complex Tasks',
     description: 'For intricate, multi-step implementations requiring deep analysis',
-    model: 'opus',
+    model: 'claude-opus-4-5-20251101',
     thinkingLevel: 'ultrathink',
     icon: 'Brain'
   },
@@ -124,7 +200,7 @@ export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
     id: 'balanced',
     name: 'Balanced',
     description: 'Good balance of speed and quality for most tasks',
-    model: 'sonnet',
+    model: 'claude-sonnet-4-5-20250929',
     thinkingLevel: 'medium',
     icon: 'Scale'
   },
@@ -132,11 +208,54 @@ export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
     id: 'quick',
     name: 'Quick Edits',
     description: 'Fast iterations for simple changes and quick fixes',
-    model: 'haiku',
+    model: 'claude-haiku-4-5-20251001',
     thinkingLevel: 'low',
     icon: 'Zap'
   }
 ];
+
+export const OPENCODE_AGENT_PROFILES: AgentProfile[] = [
+  {
+    id: 'auto',
+    name: 'Auto (Optimized)',
+    description: 'Uses optimal models for each phase',
+    model: 'opencode/big-pickle',
+    thinkingLevel: 'high',
+    icon: 'Sparkles',
+    isAutoProfile: true,
+    phaseModels: OPENCODE_DEFAULT_PHASE_MODELS,
+    phaseThinking: DEFAULT_PHASE_THINKING
+  },
+  {
+    id: 'complex',
+    name: 'Complex Tasks',
+    description: 'Uses larger reasoning models',
+    model: 'opencode/big-pickle',
+    thinkingLevel: 'ultrathink',
+    icon: 'Brain'
+  },
+  {
+    id: 'balanced',
+    name: 'Balanced',
+    description: 'Balance of speed and intelligence',
+    model: 'opencode/glm-4.7-free',
+    thinkingLevel: 'medium',
+    icon: 'Scale'
+  },
+  {
+    id: 'quick',
+    name: 'Quick Edits',
+    description: 'Fastest models for simple changes',
+    model: 'opencode/minimax-m2.1-free',
+    thinkingLevel: 'low',
+    icon: 'Zap'
+  }
+];
+
+export const AGENT_PROFILES_BY_BACKEND: Record<string, AgentProfile[]> = {
+  'claude-code': CLAUDE_CODE_AGENT_PROFILES,
+  'opencode': OPENCODE_AGENT_PROFILES
+};
 
 // ============================================
 // Memory Backends

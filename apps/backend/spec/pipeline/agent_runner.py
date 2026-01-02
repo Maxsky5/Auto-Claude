@@ -12,7 +12,7 @@ from ui.capabilities import configure_safe_encoding
 
 configure_safe_encoding()
 
-from core.client import create_client
+from core.runtime import create_agent_runtime
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from task_logger import (
     LogEntryType,
@@ -30,6 +30,7 @@ class AgentRunner:
         spec_dir: Path,
         model: str,
         task_logger: TaskLogger | None = None,
+        runtime: str | None = None,
     ):
         """Initialize the agent runner.
 
@@ -38,11 +39,13 @@ class AgentRunner:
             spec_dir: The spec directory
             model: The model to use for agent execution
             task_logger: Optional task logger for tracking progress
+            runtime: Agent runtime to use (claude-code or opencode)
         """
         self.project_dir = project_dir
         self.spec_dir = spec_dir
         self.model = model
         self.task_logger = task_logger
+        self.runtime = runtime
 
     async def run_agent(
         self,
@@ -112,14 +115,15 @@ class AgentRunner:
         # Create client with thinking budget
         debug(
             "agent_runner",
-            "Creating Claude SDK client...",
+            "Creating Agent Runtime Client...",
             thinking_budget=thinking_budget,
         )
-        client = create_client(
-            self.project_dir,
-            self.spec_dir,
-            self.model,
+        client = create_agent_runtime(
+            project_dir=self.project_dir,
+            spec_dir=self.spec_dir,
+            model=self.model,
             max_thinking_tokens=thinking_budget,
+            runtime=self.runtime or "claude-code",
         )
 
         current_tool = None

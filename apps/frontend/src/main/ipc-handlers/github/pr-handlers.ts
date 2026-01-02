@@ -12,7 +12,7 @@ import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { IPC_CHANNELS, MODEL_ID_MAP, DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING } from '../../../shared/constants';
+import { IPC_CHANNELS, DEFAULT_FEATURE_MODELS_BY_BACKEND, DEFAULT_FEATURE_THINKING } from '../../../shared/constants';
 import { getGitHubConfig, githubFetch } from './utils';
 import { readSettingsFile } from '../../settings-utils';
 import { getAugmentedEnv } from '../../env-utils';
@@ -559,19 +559,18 @@ function getReviewResult(project: Project, prNumber: number): PRReviewResult | n
  */
 function getGitHubPRSettings(): { model: string; thinkingLevel: string } {
   const rawSettings = readSettingsFile() as Partial<AppSettings> | undefined;
+  const backend = rawSettings?.agentRuntime || 'claude-code';
+  const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND[backend] || DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
 
   // Get feature models/thinking with defaults
-  const featureModels = rawSettings?.featureModels ?? DEFAULT_FEATURE_MODELS;
+  const featureModels = rawSettings?.featureModels ?? defaultFeatureModels;
   const featureThinking = rawSettings?.featureThinking ?? DEFAULT_FEATURE_THINKING;
 
   // Get PR-specific settings (with fallback to defaults)
-  const modelShort = featureModels.githubPrs ?? DEFAULT_FEATURE_MODELS.githubPrs;
+  const model = featureModels.githubPrs ?? defaultFeatureModels.githubPrs;
   const thinkingLevel = featureThinking.githubPrs ?? DEFAULT_FEATURE_THINKING.githubPrs;
 
-  // Convert model short name to full model ID
-  const model = MODEL_ID_MAP[modelShort] ?? MODEL_ID_MAP['opus'];
-
-  debugLog('GitHub PR settings', { modelShort, model, thinkingLevel });
+  debugLog('GitHub PR settings', { model, thinkingLevel, backend });
 
   return { model, thinkingLevel };
 }

@@ -6,7 +6,8 @@ import type {
   ChangelogGenerationRequest,
   ChangelogGenerationResult,
   ChangelogGenerationProgress,
-  TaskSpecContent
+  TaskSpecContent,
+  AgentRuntime
 } from '../../shared/types';
 import { buildChangelogPrompt, buildGitPrompt, createGenerationScript } from './formatter';
 import { extractChangelog } from './parser';
@@ -21,16 +22,19 @@ import { parsePythonCommand } from '../python-detector';
 export class ChangelogGenerator extends EventEmitter {
   private generationProcesses: Map<string, ReturnType<typeof spawn>> = new Map();
   private debugEnabled: boolean;
+  private runtime: AgentRuntime;
 
   constructor(
     private pythonPath: string,
     private claudePath: string,
     private autoBuildSourcePath: string,
     private autoBuildEnv: Record<string, string>,
-    debugEnabled: boolean
+    debugEnabled: boolean,
+    runtime: AgentRuntime = 'claude-code'
   ) {
     super();
     this.debugEnabled = debugEnabled;
+    this.runtime = runtime;
   }
 
   private debug(...args: unknown[]): void {
@@ -124,9 +128,8 @@ export class ChangelogGenerator extends EventEmitter {
       promptPreview: prompt.substring(0, 500) + '...'
     });
 
-    // Create Python script
-    const script = createGenerationScript(prompt, this.claudePath);
-    this.debug('Python script created', { scriptLength: script.length });
+    const script = createGenerationScript(prompt, this.claudePath, this.runtime);
+    this.debug('Python script created', { scriptLength: script.length, runtime: this.runtime });
 
     this.emitProgress(projectId, {
       stage: 'generating',

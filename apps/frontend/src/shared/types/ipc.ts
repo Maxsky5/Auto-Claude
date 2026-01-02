@@ -3,7 +3,7 @@
  */
 
 import type { IPCResult } from './common';
-import type { SupportedIDE, SupportedTerminal } from './settings';
+import type { SupportedIDE, SupportedTerminal, AgentRuntime } from './settings';
 import type {
   Project,
   ProjectSettings,
@@ -130,6 +130,18 @@ export interface TabState {
   openProjectIds: string[];
   activeProjectId: string | null;
   tabOrder: string[];
+}
+
+// Runtime availability and model types
+export interface RuntimeAvailability {
+  'claude-code': boolean;
+  opencode: boolean;
+}
+
+export interface RuntimeModel {
+  id: string;
+  provider: string;
+  name: string;
 }
 
 export interface ElectronAPI {
@@ -752,6 +764,10 @@ export interface ElectronAPI {
   // MCP Server health check operations
   checkMcpHealth: (server: CustomMcpServer) => Promise<IPCResult<McpHealthCheckResult>>;
   testMcpConnection: (server: CustomMcpServer) => Promise<IPCResult<McpTestConnectionResult>>;
+
+  // Runtime operations
+  getAvailableRuntimes: () => Promise<IPCResult<RuntimeAvailability>>;
+  getRuntimeModels: (runtime: AgentRuntime) => Promise<IPCResult<RuntimeModel[]>>;
 }
 
 declare global {

@@ -10,7 +10,7 @@ import type {
   InsightsToolUsage,
   InsightsModelConfig
 } from '../../shared/types';
-import { MODEL_ID_MAP } from '../../shared/constants';
+import { DEFAULT_FEATURE_MODELS_BY_BACKEND } from '../../shared/constants';
 import { InsightsConfig } from './config';
 import { detectRateLimit, createSDKRateLimitInfo } from '../rate-limit-detector';
 
@@ -63,7 +63,8 @@ export class InsightsExecutor extends EventEmitter {
     projectPath: string,
     message: string,
     conversationHistory: Array<{ role: string; content: string }>,
-    modelConfig?: InsightsModelConfig
+    modelConfig?: InsightsModelConfig,
+    runtime: 'claude-code' | 'opencode' = 'claude-code'
   ): Promise<ProcessorResult> {
     // Cancel any existing session
     this.cancelSession(projectId);
@@ -112,10 +113,12 @@ export class InsightsExecutor extends EventEmitter {
 
     // Add model config if provided
     if (modelConfig) {
-      const modelId = MODEL_ID_MAP[modelConfig.model] || MODEL_ID_MAP['sonnet'];
-      args.push('--model', modelId);
+      args.push('--model', modelConfig.model);
       args.push('--thinking-level', modelConfig.thinkingLevel);
     }
+
+    // Always pass runtime explicitly
+    args.push('--runtime', runtime || 'claude-code');
 
     // Spawn Python process
     const proc = spawn(this.config.getPythonPath(), args, {

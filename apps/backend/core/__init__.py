@@ -14,7 +14,32 @@ __all__ = [
     "WorkspaceManager",
     "WorktreeManager",
     "ProgressTracker",
+    # Runtime abstraction
+    "create_runtime",
+    "detect_available_runtimes",
+    "get_default_runtime",
+    "RuntimeType",
+    "AgentRuntimeBase",
 ]
+
+
+# Runtime-related exports (lazy loaded)
+_RUNTIME_EXPORTS = {
+    "create_runtime",
+    "detect_available_runtimes",
+    "get_default_runtime",
+    "get_runtime_info",
+    "RuntimeType",
+    "AgentRuntimeBase",
+    "ClaudeCodeRuntime",
+    "OpenCodeRuntime",
+    "AgentMessage",
+    "RuntimeOptions",
+    "BlockType",
+    "ContentBlock",
+    "MessageRole",
+    "SecurityConfig",
+}
 
 
 def __getattr__(name):
@@ -39,4 +64,8 @@ def __getattr__(name):
         from . import client as _client
 
         return getattr(_client, name)
+    elif name in _RUNTIME_EXPORTS:
+        from . import runtime as _runtime
+
+        return getattr(_runtime, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

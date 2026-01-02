@@ -76,6 +76,7 @@ def handle_qa_command(
     spec_dir: Path,
     model: str,
     verbose: bool = False,
+    runtime: str | None = None,
 ) -> None:
     """
     Handle the --qa command (run QA validation loop).
@@ -85,6 +86,7 @@ def handle_qa_command(
         spec_dir: Spec directory path
         model: Model to use for QA
         verbose: Enable verbose output
+        backend: Agent runtime to use (claude-code or opencode)
     """
     print_banner()
     print(f"\nRunning QA validation for: {spec_dir.name}")
@@ -115,6 +117,7 @@ def handle_qa_command(
                 spec_dir=spec_dir,
                 model=model,
                 verbose=verbose,
+                runtime=runtime,
             )
         )
         if approved:

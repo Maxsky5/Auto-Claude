@@ -85,6 +85,8 @@ backend/
 ├── analysis/        # Code analysis
 ├── cli/             # Command-line interface
 ├── core/            # Core utilities
+│   ├── runtime/     # Runtime abstraction layer
+│   └── ...
 ├── integrations/    # External services (Linear, Graphiti)
 ├── merge/           # Git merge handling
 ├── project/         # Project detection
@@ -100,6 +102,28 @@ backend/
 - **DRY** - Shared utilities in `core/`
 - **KISS** - Simple flat imports via facade modules
 
+### Runtime Abstraction
+
+All agent interactions use a unified runtime abstraction.
+
+```python
+from core.runtime import create_agent_runtime
+
+# Create runtime (defaults to claude-code)
+runtime = create_agent_runtime(
+    project_dir=project_dir,
+    spec_dir=spec_dir,
+    model="claude-sonnet-4-5",
+    agent_type="coder",
+)
+
+# Use in async context
+async with runtime:
+    await runtime.query("Implement feature X")
+    async for msg in runtime.receive_response():
+        print(msg.get_text())
+```
+
 ### Import Convention
 
 ```python
@@ -107,6 +131,7 @@ backend/
 from debug import debug, debug_error
 from progress import count_subtasks
 from workspace import setup_workspace
+from core.runtime import create_agent_runtime
 ```
 
 ### Adding Features

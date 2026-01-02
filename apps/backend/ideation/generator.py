@@ -16,7 +16,7 @@ from pathlib import Path
 # Add auto-claude to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from client import create_client
+from core.runtime import create_agent_runtime
 from phase_config import get_thinking_budget
 from ui import print_status
 
@@ -91,10 +91,10 @@ class IdeationGenerator:
             prompt += f"\n{additional_context}\n"
 
         # Create client with thinking budget
-        client = create_client(
-            self.project_dir,
-            self.output_dir,
-            self.model,
+        client = create_agent_runtime(
+            project_dir=self.project_dir,
+            spec_dir=self.output_dir,
+            model=self.model,
             max_thinking_tokens=self.thinking_budget,
         )
 
@@ -184,10 +184,10 @@ Common fixes:
 Write the fixed JSON to the file now.
 """
 
-        client = create_client(
-            self.project_dir,
-            self.output_dir,
-            self.model,
+        client = create_agent_runtime(
+            project_dir=self.project_dir,
+            spec_dir=self.output_dir,
+            model=self.model,
             max_thinking_tokens=self.thinking_budget,
         )
 

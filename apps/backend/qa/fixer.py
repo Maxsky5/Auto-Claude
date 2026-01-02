@@ -7,7 +7,7 @@ Runs QA fixer sessions to resolve issues identified by the reviewer.
 
 from pathlib import Path
 
-from claude_agent_sdk import ClaudeSDKClient
+from core.runtime import AgentRuntimeBase, BlockType
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from task_logger import (
     LogEntryType,
@@ -40,7 +40,7 @@ def load_qa_fixer_prompt() -> str:
 
 
 async def run_qa_fixer_session(
-    client: ClaudeSDKClient,
+    client: AgentRuntimeBase,
     spec_dir: Path,
     fix_session: int,
     verbose: bool = False,
@@ -49,7 +49,7 @@ async def run_qa_fixer_session(
     Run a QA fixer agent session.
 
     Args:
-        client: Claude SDK client
+        client: Agent backend instance
         spec_dir: Spec directory
         fix_session: Fix iteration number
         verbose: Whether to show detailed output
@@ -111,14 +111,11 @@ async def run_qa_fixer_session(
                 msg_type=msg_type,
             )
 
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+            if msg_type == "AgentMessage":
                 for block in msg.content:
-                    block_type = type(block).__name__
-
-                    if block_type == "TextBlock" and hasattr(block, "text"):
+                    if block.type == BlockType.TEXT and block.text:
                         response_text += block.text
                         print(block.text, end="", flush=True)
-                        # Log text to task logger (persist without double-printing)
                         if task_logger and block.text.strip():
                             task_logger.log(
                                 block.text,
@@ -126,24 +123,23 @@ async def run_qa_fixer_session(
                                 LogPhase.VALIDATION,
                                 print_to_console=False,
                             )
-                    elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                        tool_name = block.name
+                    elif block.type == BlockType.TOOL_USE:
+                        tool_name = block.tool_name or "unknown"
                         tool_input = None
                         tool_count += 1
 
-                        if hasattr(block, "input") and block.input:
-                            inp = block.input
-                            if isinstance(inp, dict):
-                                if "file_path" in inp:
-                                    fp = inp["file_path"]
-                                    if len(fp) > 50:
-                                        fp = "..." + fp[-47:]
-                                    tool_input = fp
-                                elif "command" in inp:
-                                    cmd = inp["command"]
-                                    if len(cmd) > 50:
-                                        cmd = cmd[:47] + "..."
-                                    tool_input = cmd
+                        if block.tool_input and isinstance(block.tool_input, dict):
+                            inp = block.tool_input
+                            if "file_path" in inp:
+                                fp = inp["file_path"]
+                                if len(fp) > 50:
+                                    fp = "..." + fp[-47:]
+                                tool_input = fp
+                            elif "command" in inp:
+                                cmd = inp["command"]
+                                if len(cmd) > 50:
+                                    cmd = cmd[:47] + "..."
+                                tool_input = cmd
 
                         debug(
                             "qa_fixer",
@@ -151,7 +147,6 @@ async def run_qa_fixer_session(
                             tool_input=tool_input,
                         )
 
-                        # Log tool start (handles printing)
                         if task_logger:
                             task_logger.tool_start(
                                 tool_name,
@@ -162,21 +157,17 @@ async def run_qa_fixer_session(
                         else:
                             print(f"\n[Fixer Tool: {tool_name}]", flush=True)
 
-                        if verbose and hasattr(block, "input"):
-                            input_str = str(block.input)
+                        if verbose and block.tool_input:
+                            input_str = str(block.tool_input)
                             if len(input_str) > 300:
                                 print(f"   Input: {input_str[:300]}...", flush=True)
                             else:
                                 print(f"   Input: {input_str}", flush=True)
                         current_tool = tool_name
 
-            elif msg_type == "UserMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
-
-                    if block_type == "ToolResultBlock":
-                        is_error = getattr(block, "is_error", False)
-                        result_content = getattr(block, "content", "")
+                    elif block.type == BlockType.TOOL_RESULT:
+                        is_error = block.is_error or False
+                        result_content = block.text or ""
 
                         if is_error:
                             debug_error(
@@ -187,7 +178,6 @@ async def run_qa_fixer_session(
                             error_str = str(result_content)[:500]
                             print(f"   [Error] {error_str}", flush=True)
                             if task_logger and current_tool:
-                                # Store full error in detail for expandable view
                                 task_logger.tool_end(
                                     current_tool,
                                     success=False,
@@ -207,7 +197,6 @@ async def run_qa_fixer_session(
                             else:
                                 print("   [Done]", flush=True)
                             if task_logger and current_tool:
-                                # Store full result in detail for expandable view
                                 detail_content = None
                                 if current_tool in (
                                     "Read",

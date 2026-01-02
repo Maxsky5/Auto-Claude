@@ -478,5 +478,9 @@ export const IPC_CHANNELS = {
 
   // MCP Server health checks
   MCP_CHECK_HEALTH: 'mcp:checkHealth',           // Quick connectivity check
-  MCP_TEST_CONNECTION: 'mcp:testConnection'      // Full MCP protocol test
+  MCP_TEST_CONNECTION: 'mcp:testConnection',     // Full MCP protocol test
+
+  // Agent Runtime operations
+  RUNTIME_GET_AVAILABLE: 'runtime:getAvailable',
+  RUNTIME_GET_MODELS: 'runtime:getModels'
 } as const;

@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 try:
     from ...analysis.test_discovery import TestDiscovery
-    from ...core.client import create_client
+    from ...core.runtime import create_agent_runtime
     from ..context_gatherer import PRContext
     from ..models import PRReviewFinding, ReviewSeverity
     from .category_utils import map_category
@@ -24,7 +25,7 @@ except (ImportError, ValueError, SystemError):
     from analysis.test_discovery import TestDiscovery
     from category_utils import map_category
     from context_gatherer import PRContext
-    from core.client import create_client
+    from core.runtime import create_agent_runtime
     from models import PRReviewFinding, ReviewSeverity
 
 logger = logging.getLogger(__name__)
@@ -124,11 +125,11 @@ async def spawn_security_review(
             project_dir.parent.parent if project_dir.name == "backend" else project_dir
         )
 
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=project_root,
             spec_dir=github_dir,
             model=model,
-            agent_type="pr_reviewer",  # Read-only - no bash, no edits
+            agent_type="pr_reviewer",
         )
 
         # Run review session
@@ -140,7 +141,7 @@ async def spawn_security_review(
                 msg_type = type(msg).__name__
                 if msg_type == "AssistantMessage" and hasattr(msg, "content"):
                     for block in msg.content:
-                        if hasattr(block, "text"):
+                        if hasattr(block, "text") and block.text:
                             result_text += block.text
 
         # Parse findings
@@ -208,11 +209,11 @@ async def spawn_quality_review(
             project_dir.parent.parent if project_dir.name == "backend" else project_dir
         )
 
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=project_root,
             spec_dir=github_dir,
             model=model,
-            agent_type="pr_reviewer",  # Read-only - no bash, no edits
+            agent_type="pr_reviewer",
         )
 
         result_text = ""
@@ -223,7 +224,7 @@ async def spawn_quality_review(
                 msg_type = type(msg).__name__
                 if msg_type == "AssistantMessage" and hasattr(msg, "content"):
                     for block in msg.content:
-                        if hasattr(block, "text"):
+                        if hasattr(block, "text") and block.text:
                             result_text += block.text
 
         findings = _parse_findings_from_response(result_text, source="quality_agent")
@@ -301,11 +302,11 @@ Output findings in JSON format:
             project_dir.parent.parent if project_dir.name == "backend" else project_dir
         )
 
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=project_root,
             spec_dir=github_dir,
             model=model,
-            agent_type="pr_reviewer",  # Read-only - no bash, no edits
+            agent_type="pr_reviewer",
         )
 
         result_text = ""
@@ -316,7 +317,7 @@ Output findings in JSON format:
                 msg_type = type(msg).__name__
                 if msg_type == "AssistantMessage" and hasattr(msg, "content"):
                     for block in msg.content:
-                        if hasattr(block, "text"):
+                        if hasattr(block, "text") and block.text:
                             result_text += block.text
 
         findings = _parse_findings_from_response(result_text, source="deep_analysis")
@@ -557,15 +558,15 @@ def _parse_findings_from_response(
                     severity = ReviewSeverity.MEDIUM
 
                 finding = PRReviewFinding(
-                    file=data.get("file", "unknown"),
-                    line=data.get("line", 0),
+                    id=str(uuid.uuid4()),
+                    severity=severity,
+                    category=category,
                     title=data.get("title", "Untitled finding"),
                     description=data.get("description", ""),
-                    category=category,
-                    severity=severity,
-                    suggestion=data.get("suggestion", ""),
+                    file=data.get("file", "unknown"),
+                    line=data.get("line", 0),
+                    suggested_fix=data.get("suggestion", ""),
                     confidence=data.get("confidence", 80),
-                    source=source,
                 )
                 findings.append(finding)
 
