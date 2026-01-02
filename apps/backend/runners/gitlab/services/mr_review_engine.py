@@ -156,7 +156,7 @@ Provide your review in the following JSON format:
         Returns:
             Tuple of (findings, verdict, summary, blockers)
         """
-        from core.client import create_client
+        from core.runtime import create_agent_runtime
 
         self._report_progress(
             "analyzing", 30, "Running AI analysis...", mr_iid=context.mr_iid
@@ -218,11 +218,11 @@ Provide your review in the following JSON format:
             project_root = self.project_dir.parent.parent
 
         # Create the client
-        client = create_client(
+        client = create_agent_runtime(
             project_dir=project_root,
             spec_dir=self.gitlab_dir,
             model=self.config.model,
-            agent_type="pr_reviewer",  # Read-only - no bash, no edits
+            agent_type="pr_reviewer",
         )
 
         result_text = ""

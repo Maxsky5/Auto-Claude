@@ -9,7 +9,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from core.client import create_client
+from core.runtime import create_agent_runtime
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -75,6 +75,7 @@ async def run_autonomous_agent(
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
+    runtime: str | None = None,
 ) -> None:
     """
     Run the autonomous agent loop with automatic memory management.
@@ -89,6 +90,7 @@ async def run_autonomous_agent(
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
+        runtime: Agent runtime to use (claude-code or opencode)
     """
     # Initialize recovery manager (handles memory persistence)
     recovery_manager = RecoveryManager(spec_dir, project_dir)
@@ -257,13 +259,17 @@ async def run_autonomous_agent(
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
         # Create client (fresh context) with phase-specific model and thinking
-        # Use appropriate agent_type for correct tool permissions and thinking budget
-        client = create_client(
-            project_dir,
-            spec_dir,
-            phase_model,
+        client = create_agent_runtime(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            model=phase_model,
             agent_type="planner" if first_run else "coder",
             max_thinking_tokens=phase_thinking_budget,
+            runtime=runtime,
+        )
+            agent_type="planner" if first_run else "coder",
+            max_thinking_tokens=phase_thinking_budget,
+            runtime=runtime,
         )
 
         # Generate appropriate prompt

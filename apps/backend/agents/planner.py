@@ -8,7 +8,7 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 import logging
 from pathlib import Path
 
-from core.client import create_client
+from core.runtime import create_agent_runtime
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from task_logger import (
@@ -37,6 +37,7 @@ async def run_followup_planner(
     spec_dir: Path,
     model: str,
     verbose: bool = False,
+    runtime: str | None = None,
 ) -> bool:
     """
     Run the follow-up planner to add new subtasks to a completed spec.
@@ -58,6 +59,7 @@ async def run_followup_planner(
         spec_dir: Directory containing the completed spec
         model: Claude model to use
         verbose: Whether to show detailed output
+        runtime: Agent runtime to use (claude-code or opencode)
 
     Returns:
         bool: True if planning completed successfully
@@ -95,11 +97,13 @@ async def run_followup_planner(
     # Respects task_metadata.json configuration when no CLI override
     planning_model = get_phase_model(spec_dir, "planning", model)
     planning_thinking_budget = get_phase_thinking_budget(spec_dir, "planning")
-    client = create_client(
-        project_dir,
-        spec_dir,
-        planning_model,
+    client = create_agent_runtime(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        model=planning_model,
+        agent_type="planner",
         max_thinking_tokens=planning_thinking_budget,
+        runtime=runtime,
     )
 
     # Generate follow-up planner prompt

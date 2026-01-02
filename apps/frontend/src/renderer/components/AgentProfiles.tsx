@@ -1,7 +1,8 @@
 import { Brain, Scale, Zap, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
+import { AGENT_PROFILES_BY_BACKEND, THINKING_LEVELS, getRuntimeConfig } from '../../shared/constants';
 import { useSettingsStore, saveSettings } from '../stores/settings-store';
+import { useAvailableModels } from '../hooks/useAvailableModels';
 import type { AgentProfile } from '../../shared/types/settings';
 
 /**
@@ -19,6 +20,12 @@ const iconMap: Record<string, React.ElementType> = {
  */
 export function AgentProfiles() {
   const settings = useSettingsStore((state) => state.settings);
+  const { models: availableModels } = useAvailableModels(settings);
+  const backend = settings.agentRuntime || 'claude-code';
+  const runtimeConfig = getRuntimeConfig(backend);
+  const supportsThinking = runtimeConfig.supportsThinking;
+  const defaultAgentProfiles = AGENT_PROFILES_BY_BACKEND[backend] || AGENT_PROFILES_BY_BACKEND['claude-code'];
+
   const selectedProfileId = settings.selectedAgentProfile || 'auto';
 
   const handleSelectProfile = async (profileId: string) => {
@@ -29,7 +36,7 @@ export function AgentProfiles() {
    * Get human-readable model label
    */
   const getModelLabel = (modelValue: string): string => {
-    const model = AVAILABLE_MODELS.find((m) => m.value === modelValue);
+    const model = availableModels.find((m) => m.value === modelValue);
     return model?.label || modelValue;
   };
 
@@ -94,9 +101,11 @@ export function AgentProfiles() {
               <span className="inline-flex items-center rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                 {getModelLabel(profile.model)}
               </span>
-              <span className="inline-flex items-center rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                {getThinkingLabel(profile.thinkingLevel)} Thinking
-              </span>
+              {supportsThinking && (
+                <span className="inline-flex items-center rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  {getThinkingLabel(profile.thinkingLevel)} Thinking
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -132,7 +141,7 @@ export function AgentProfiles() {
 
           {/* Profile cards */}
           <div className="space-y-3">
-            {DEFAULT_AGENT_PROFILES.map(renderProfileCard)}
+            {defaultAgentProfiles.map(renderProfileCard)}
           </div>
         </div>
       </div>

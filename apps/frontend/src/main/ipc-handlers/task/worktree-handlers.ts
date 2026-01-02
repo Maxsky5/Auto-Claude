@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, shell, app } from 'electron';
-import { IPC_CHANNELS, AUTO_BUILD_PATHS, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING, MODEL_ID_MAP, THINKING_BUDGET_MAP } from '../../../shared/constants';
+import { IPC_CHANNELS, AUTO_BUILD_PATHS, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_MODELS_BY_BACKEND, DEFAULT_FEATURE_THINKING, THINKING_BUDGET_MAP } from '../../../shared/constants';
 import type { IPCResult, WorktreeStatus, WorktreeDiff, WorktreeDiffFile, WorktreeMergeResult, WorktreeDiscardResult, WorktreeListResult, WorktreeListItem, SupportedIDE, SupportedTerminal, AppSettings } from '../../../shared/types';
 import path from 'path';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
@@ -27,17 +27,19 @@ function getUtilitySettings(): { model: string; modelId: string; thinkingLevel: 
     if (existsSync(settingsPath)) {
       const content = readFileSync(settingsPath, 'utf-8');
       const settings: AppSettings = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(content) };
+      const backend = settings.agentRuntime || 'claude-code';
+      const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND[backend] || DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
 
       // Get utility-specific settings
-      const featureModels = settings.featureModels || DEFAULT_FEATURE_MODELS;
+      const featureModels = settings.featureModels || defaultFeatureModels;
       const featureThinking = settings.featureThinking || DEFAULT_FEATURE_THINKING;
 
-      const model = featureModels.utility || DEFAULT_FEATURE_MODELS.utility;
+      const model = featureModels.utility || defaultFeatureModels.utility;
       const thinkingLevel = featureThinking.utility || DEFAULT_FEATURE_THINKING.utility;
 
       return {
         model,
-        modelId: MODEL_ID_MAP[model] || MODEL_ID_MAP.haiku,
+        modelId: model,
         thinkingLevel,
         thinkingBudget: thinkingLevel in THINKING_BUDGET_MAP ? THINKING_BUDGET_MAP[thinkingLevel] : THINKING_BUDGET_MAP.low
       };
@@ -48,9 +50,10 @@ function getUtilitySettings(): { model: string; modelId: string; thinkingLevel: 
   }
 
   // Return defaults if settings file doesn't exist or fails to parse
+  const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
   return {
-    model: DEFAULT_FEATURE_MODELS.utility,
-    modelId: MODEL_ID_MAP[DEFAULT_FEATURE_MODELS.utility],
+    model: defaultFeatureModels.utility,
+    modelId: defaultFeatureModels.utility,
     thinkingLevel: DEFAULT_FEATURE_THINKING.utility,
     thinkingBudget: THINKING_BUDGET_MAP[DEFAULT_FEATURE_THINKING.utility]
   };

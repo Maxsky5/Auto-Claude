@@ -166,6 +166,13 @@ Examples:
         help="Model to use for agent phases (haiku, sonnet, opus, or full model ID)",
     )
     parser.add_argument(
+        "--runtime",
+        type=str,
+        default=None,
+        choices=["claude-code", "opencode"],
+        help="Agent runtime to use (default: claude-code)",
+    )
+    parser.add_argument(
         "--thinking-level",
         type=str,
         default="medium",
@@ -262,6 +269,7 @@ Examples:
         thinking_level=args.thinking_level,
         complexity_override=args.complexity,
         use_ai_assessment=not args.no_ai_assessment,
+        runtime=args.runtime,
     )
 
     try:
@@ -327,6 +335,10 @@ Examples:
             # Pass base branch if specified (for worktree creation)
             if args.base_branch:
                 run_cmd.extend(["--base-branch", args.base_branch])
+
+            # Pass backend if specified
+            if args.runtime:
+                run_cmd.extend(["--runtime", args.runtime])
 
             # Note: Model configuration for subsequent phases (planning, coding, qa)
             # is read from task_metadata.json by run.py, so we don't pass it here.

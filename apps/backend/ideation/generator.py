@@ -16,8 +16,8 @@ from pathlib import Path
 # Add auto-claude to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from client import create_client
-from phase_config import get_thinking_budget, resolve_model_id
+from core.runtime import create_agent_runtime, BlockType
+from phase_config import get_thinking_budget
 from ui import print_status
 
 # Ideation types
@@ -91,10 +91,10 @@ class IdeationGenerator:
             prompt += f"\n{additional_context}\n"
 
         # Create client with thinking budget
-        client = create_client(
-            self.project_dir,
-            self.output_dir,
-            resolve_model_id(self.model),
+        client = create_agent_runtime(
+            project_dir=self.project_dir,
+            spec_dir=self.output_dir,
+            model=self.model,
             max_thinking_tokens=self.thinking_budget,
         )
 
@@ -106,16 +106,13 @@ class IdeationGenerator:
                 async for msg in client.receive_response():
                     msg_type = type(msg).__name__
 
-                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    if msg_type == "AgentMessage":
                         for block in msg.content:
-                            block_type = type(block).__name__
-                            if block_type == "TextBlock" and hasattr(block, "text"):
+                            if block.type == BlockType.TEXT and block.text:
                                 response_text += block.text
                                 print(block.text, end="", flush=True)
-                            elif block_type == "ToolUseBlock" and hasattr(
-                                block, "name"
-                            ):
-                                print(f"\n[Tool: {block.name}]", flush=True)
+                            elif block.type == BlockType.TOOL_USE:
+                                print(f"\n[Tool: {block.tool_name}]", flush=True)
 
                 print()
                 return True, response_text
@@ -184,10 +181,10 @@ Common fixes:
 Write the fixed JSON to the file now.
 """
 
-        client = create_client(
-            self.project_dir,
-            self.output_dir,
-            resolve_model_id(self.model),
+        client = create_agent_runtime(
+            project_dir=self.project_dir,
+            spec_dir=self.output_dir,
+            model=self.model,
             max_thinking_tokens=self.thinking_budget,
         )
 
@@ -198,15 +195,14 @@ Write the fixed JSON to the file now.
                 async for msg in client.receive_response():
                     msg_type = type(msg).__name__
 
-                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    if msg_type == "AgentMessage":
                         for block in msg.content:
-                            block_type = type(block).__name__
-                            if block_type == "TextBlock" and hasattr(block, "text"):
+                            if block.type == BlockType.TEXT and block.text:
                                 print(block.text, end="", flush=True)
-                            elif block_type == "ToolUseBlock" and hasattr(
-                                block, "name"
-                            ):
-                                print(f"\n[Recovery Tool: {block.name}]", flush=True)
+                            elif block.type == BlockType.TOOL_USE:
+                                print(
+                                    f"\n[Recovery Tool: {block.tool_name}]", flush=True
+                                )
 
                 print()
                 return True

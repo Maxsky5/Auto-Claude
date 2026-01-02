@@ -17,12 +17,13 @@ import {
   SelectValue
 } from '../ui/select';
 import { Separator } from '../ui/separator';
-import { AVAILABLE_MODELS } from '../../../shared/constants';
+import { AVAILABLE_MODELS_BY_BACKEND } from '../../../shared/constants';
 import type {
   Project,
   ProjectSettings as ProjectSettingsType,
   AutoBuildVersionInfo
 } from '../../../shared/types';
+import { useSettingsStore } from '../../stores/settings-store';
 
 interface GeneralSettingsProps {
   project: Project;
@@ -44,6 +45,9 @@ export function GeneralSettings({
   handleInitialize
 }: GeneralSettingsProps) {
   const { t } = useTranslation(['settings']);
+  const appSettings = useSettingsStore((state) => state.settings);
+  const backend = appSettings.agentRuntime || 'claude-code';
+  const availableModels = AVAILABLE_MODELS_BY_BACKEND[backend] || AVAILABLE_MODELS_BY_BACKEND['claude-code'];
 
   return (
     <>
@@ -122,7 +126,7 @@ export function GeneralSettings({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {AVAILABLE_MODELS.map((model) => (
+                  {availableModels.map((model) => (
                     <SelectItem key={model.value} value={model.value}>
                       {model.label}
                     </SelectItem>

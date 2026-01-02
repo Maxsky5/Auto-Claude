@@ -118,6 +118,14 @@ Environment Variables:
     )
 
     parser.add_argument(
+        "--runtime",
+        type=str,
+        default=None,
+        choices=["claude-code", "opencode"],
+        help="Agent runtime to use (default: claude-code)",
+    )
+
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose output",
@@ -380,6 +388,7 @@ def main() -> None:
             spec_dir=spec_dir,
             model=model,
             verbose=args.verbose,
+            runtime=args.runtime,
         )
         return
 
@@ -390,6 +399,7 @@ def main() -> None:
             spec_dir=spec_dir,
             model=model,
             verbose=args.verbose,
+            runtime=args.runtime,
         )
         return
 
@@ -406,6 +416,7 @@ def main() -> None:
         skip_qa=args.skip_qa,
         force_bypass_approval=args.force,
         base_branch=args.base_branch,
+        runtime=args.runtime,
     )
 
 

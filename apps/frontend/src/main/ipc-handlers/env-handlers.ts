@@ -56,6 +56,9 @@ export function registerEnvHandlers(
     if (config.autoBuildModel !== undefined) {
       existingVars['AUTO_BUILD_MODEL'] = config.autoBuildModel;
     }
+    if (config.agentRuntime !== undefined) {
+      existingVars['AGENT_RUNTIME'] = config.agentRuntime;
+    }
     if (config.linearApiKey !== undefined) {
       existingVars['LINEAR_API_KEY'] = config.linearApiKey;
     }
@@ -196,6 +199,12 @@ CLAUDE_CODE_OAUTH_TOKEN=${existingVars['CLAUDE_CODE_OAUTH_TOKEN'] || ''}
 
 # Model override (OPTIONAL)
 ${existingVars['AUTO_BUILD_MODEL'] ? `AUTO_BUILD_MODEL=${existingVars['AUTO_BUILD_MODEL']}` : '# AUTO_BUILD_MODEL=claude-opus-4-5-20251101'}
+
+# =============================================================================
+# AGENT RUNTIME (OPTIONAL)
+# Choose which CLI to use: claude-code (default) or opencode (multi-provider)
+# =============================================================================
+${existingVars['AGENT_RUNTIME'] ? `AGENT_RUNTIME=${existingVars['AGENT_RUNTIME']}` : '# AGENT_RUNTIME=claude-code'}
 
 # =============================================================================
 # LINEAR INTEGRATION (OPTIONAL)
@@ -363,6 +372,10 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
 
       if (vars['AUTO_BUILD_MODEL']) {
         config.autoBuildModel = vars['AUTO_BUILD_MODEL'];
+      }
+
+      if (vars['AGENT_RUNTIME']) {
+        config.agentRuntime = vars['AGENT_RUNTIME'] as 'claude-code' | 'opencode';
       }
 
       if (vars['LINEAR_API_KEY']) {

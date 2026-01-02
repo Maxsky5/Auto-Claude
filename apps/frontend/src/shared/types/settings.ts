@@ -157,19 +157,19 @@ export interface ColorThemeDefinition {
   previewColors: ThemePreviewColors;
 }
 
+// Agent runtime type - which CLI to use for running agents
+export type AgentRuntime = 'claude-code' | 'opencode';
+
 // Thinking level for Claude model (budget token allocation)
 export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'ultrathink';
-
-// Model type shorthand
-export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus';
 
 // Phase-based model configuration for Auto profile
 // Each phase can use a different model optimized for that task type
 export interface PhaseModelConfig {
-  spec: ModelTypeShort;       // Spec creation (discovery, requirements, context)
-  planning: ModelTypeShort;   // Implementation planning
-  coding: ModelTypeShort;     // Actual coding implementation
-  qa: ModelTypeShort;         // QA review and fixing
+  spec: string;       // Spec creation (discovery, requirements, context)
+  planning: string;   // Implementation planning
+  coding: string;     // Actual coding implementation
+  qa: string;         // QA review and fixing
 }
 
 // Thinking level configuration per phase
@@ -182,12 +182,12 @@ export interface PhaseThinkingConfig {
 
 // Feature-specific model configuration (for non-pipeline features)
 export interface FeatureModelConfig {
-  insights: ModelTypeShort;    // Insights chat feature
-  ideation: ModelTypeShort;    // Ideation generation
-  roadmap: ModelTypeShort;     // Roadmap generation
-  githubIssues: ModelTypeShort; // GitHub Issues automation
-  githubPrs: ModelTypeShort;    // GitHub PR review automation
-  utility: ModelTypeShort;      // Utility agents (commit message, merge resolver)
+  insights: string;    // Insights chat feature
+  ideation: string;    // Ideation generation
+  roadmap: string;     // Roadmap generation
+  githubIssues: string; // GitHub Issues automation
+  githubPrs: string;    // GitHub PR review automation
+  utility: string;      // Utility agents (commit message, merge resolver)
 }
 
 // Feature-specific thinking level configuration
@@ -205,7 +205,7 @@ export interface AgentProfile {
   id: string;
   name: string;
   description: string;
-  model: ModelTypeShort;
+  model: string;
   thinkingLevel: ThinkingLevel;
   icon?: string;  // Lucide icon name
   // Auto profile specific - per-phase configuration
@@ -219,6 +219,7 @@ export interface AppSettings {
   colorTheme?: ColorTheme;
   defaultModel: string;
   agentFramework: string;
+  agentRuntime?: AgentRuntime;
   pythonPath?: string;
   gitPath?: string;
   githubCLIPath?: string;

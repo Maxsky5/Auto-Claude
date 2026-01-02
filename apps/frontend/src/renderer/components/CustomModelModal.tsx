@@ -17,7 +17,9 @@ import {
   SelectTrigger,
   SelectValue
 } from './ui/select';
-import { AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
+import { THINKING_LEVELS, getRuntimeConfig } from '../../shared/constants';
+import { useSettingsStore } from '../stores/settings-store';
+import { useAvailableModels } from '../hooks/useAvailableModels';
 import type { InsightsModelConfig } from '../../shared/types';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 
@@ -30,6 +32,12 @@ interface CustomModelModalProps {
 
 export function CustomModelModal({ currentConfig, onSave, onClose, open = true }: CustomModelModalProps) {
   const { t } = useTranslation('dialogs');
+  
+  const settings = useSettingsStore((state) => state.settings);
+  const { models: availableModels } = useAvailableModels(settings);
+  const runtimeConfig = getRuntimeConfig(settings.agentRuntime || 'claude-code');
+  const showThinking = runtimeConfig.supportsThinking;
+
   const [model, setModel] = useState<ModelType>(
     currentConfig?.model || 'sonnet'
   );
@@ -71,7 +79,7 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {AVAILABLE_MODELS.map((m) => (
+                {availableModels.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
                   </SelectItem>
@@ -80,26 +88,28 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="thinking-select">{t('customModel.thinkingLevel')}</Label>
-            <Select value={thinkingLevel} onValueChange={(v) => setThinkingLevel(v as ThinkingLevel)}>
-              <SelectTrigger id="thinking-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {THINKING_LEVELS.map((level) => (
-                  <SelectItem key={level.value} value={level.value}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{level.label}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {level.description}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {showThinking && (
+            <div className="space-y-2">
+              <Label htmlFor="thinking-select">{t('customModel.thinkingLevel')}</Label>
+              <Select value={thinkingLevel} onValueChange={(v) => setThinkingLevel(v as ThinkingLevel)}>
+                <SelectTrigger id="thinking-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {THINKING_LEVELS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{level.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {level.description}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

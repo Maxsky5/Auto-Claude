@@ -28,6 +28,7 @@ if env_file.exists():
     load_dotenv(env_file)
 
 from debug import debug, debug_error, debug_warning
+from core.runtime import DEFAULT_RUNTIME, RUNTIME_CHOICES
 
 # Import from refactored roadmap package
 from roadmap import RoadmapOrchestrator
@@ -82,6 +83,13 @@ def main():
         dest="refresh_competitor_analysis",
         help="Force refresh competitor analysis even if it exists (requires --competitor-analysis)",
     )
+    parser.add_argument(
+        "--runtime",
+        type=str,
+        default=DEFAULT_RUNTIME,
+        choices=RUNTIME_CHOICES,
+        help=f"Agent runtime to use (default: {DEFAULT_RUNTIME})",
+    )
 
     args = parser.parse_args()
 
@@ -91,6 +99,7 @@ def main():
         project=str(args.project),
         output=str(args.output) if args.output else None,
         model=args.model,
+        runtime=args.runtime,
         refresh=args.refresh,
     )
 
@@ -117,6 +126,7 @@ def main():
         refresh=args.refresh,
         enable_competitor_analysis=args.enable_competitor_analysis,
         refresh_competitor_analysis=args.refresh_competitor_analysis,
+        runtime=args.runtime,
     )
 
     try:

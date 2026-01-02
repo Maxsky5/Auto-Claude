@@ -22,7 +22,9 @@ import { Badge } from '../ui/badge';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
 import { cn } from '../../lib/utils';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
-import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
+import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel } from '../../../shared/types/settings';
+import { getRuntimeConfig } from '../../../shared/constants/models';
+import { useSettingsStore } from '../../stores/settings-store';
 
 interface TaskLogsProps {
   task: Task;
@@ -63,7 +65,7 @@ const LOG_PHASE_TO_CONFIG_PHASE: Record<TaskLogPhase, keyof PhaseModelConfig> = 
 };
 
 // Short labels for models
-const MODEL_SHORT_LABELS: Record<ModelTypeShort, string> = {
+const MODEL_SHORT_LABELS: Record<string, string> = {
   opus: 'Opus',
   sonnet: 'Sonnet',
   haiku: 'Haiku'
@@ -119,6 +121,9 @@ export function TaskLogs({
   onLogsScroll,
   onTogglePhase
 }: TaskLogsProps) {
+  const agentRuntime = useSettingsStore((state) => state.settings.agentRuntime);
+  const runtimeConfig = getRuntimeConfig(agentRuntime || 'claude-code');
+  
   return (
     <div
       ref={logsContainerRef}
@@ -142,6 +147,7 @@ export function TaskLogs({
                 onToggle={() => onTogglePhase(phase)}
                 isTaskStuck={isStuck}
                 phaseConfig={getPhaseConfig(task.metadata, phase)}
+                supportsThinking={runtimeConfig.supportsThinking}
               />
             ))}
             <div ref={logsEndRef} />
@@ -172,9 +178,10 @@ interface PhaseLogSectionProps {
   onToggle: () => void;
   isTaskStuck?: boolean;
   phaseConfig?: { model: string; thinking: string } | null;
+  supportsThinking: boolean;
 }
 
-function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {
+function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig, supportsThinking }: PhaseLogSectionProps) {
   const Icon = PHASE_ICONS[phase];
   const status = phaseLog?.status || 'pending';
   const hasEntries = (phaseLog?.entries.length || 0) > 0;
@@ -257,11 +264,15 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
                   <Cpu className="h-3 w-3" />
                   <span>{phaseConfig.model}</span>
                 </div>
-                <span className="text-muted-foreground/50">|</span>
-                <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
-                  <Brain className="h-3 w-3" />
-                  <span>{phaseConfig.thinking}</span>
-                </div>
+                {supportsThinking && (
+                  <>
+                    <span className="text-muted-foreground/50">|</span>
+                    <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
+                      <Brain className="h-3 w-3" />
+                      <span>{phaseConfig.thinking}</span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             {getStatusBadge()}

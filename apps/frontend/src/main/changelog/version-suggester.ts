@@ -1,10 +1,11 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
-import type { GitCommit } from '../../shared/types';
+import type { GitCommit, AgentRuntime } from '../../shared/types';
 import { getProfileEnv } from '../rate-limit-detector';
 import { parsePythonCommand } from '../python-detector';
 import { getAugmentedEnv } from '../env-utils';
+import { DEFAULT_FEATURE_MODELS_BY_BACKEND } from '../../shared/constants';
 
 interface VersionSuggestion {
   version: string;
@@ -18,14 +19,17 @@ interface VersionSuggestion {
  */
 export class VersionSuggester {
   private debugEnabled: boolean;
+  private runtime: AgentRuntime;
 
   constructor(
     private pythonPath: string,
     private claudePath: string,
     private autoBuildSourcePath: string,
-    debugEnabled: boolean
+    debugEnabled: boolean,
+    runtime: AgentRuntime = 'claude-code'
   ) {
     this.debugEnabled = debugEnabled;
+    this.runtime = runtime;
   }
 
   private debug(...args: unknown[]): void {
@@ -129,33 +133,62 @@ Respond with ONLY a JSON object in this exact format (no markdown, no extra text
    * Create Python script to run Claude analysis
    */
   private createAnalysisScript(prompt: string): string {
-    // Escape the prompt for Python string literal
-    const escapedPrompt = prompt
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, '\\n');
+    const escapedPrompt = JSON.stringify(prompt);
+    const model = DEFAULT_FEATURE_MODELS_BY_BACKEND[this.runtime].utility;
 
     return `
-import subprocess
+import asyncio
 import sys
+from pathlib import Path
 
-# Use haiku model for fast, cost-effective analysis
-prompt = "${escapedPrompt}"
+sys.path.insert(0, str(Path(__file__).parent))
 
-try:
-    result = subprocess.run(
-        ["${this.claudePath}", "chat", "--model", "haiku", "--prompt", prompt],
-        capture_output=True,
-        text=True,
-        check=True
-    )
-    print(result.stdout)
-except subprocess.CalledProcessError as e:
-    print(f"Error: {e.stderr}", file=sys.stderr)
-    sys.exit(1)
-except Exception as e:
-    print(f"Error: {str(e)}", file=sys.stderr)
-    sys.exit(1)
+async def analyze_version():
+    try:
+        from core.runtime import create_agent_runtime, BlockType
+
+        prompt = ${escapedPrompt}
+        runtime_type = "${this.runtime}"
+        model = "${model}"
+
+        runtime = create_agent_runtime(
+            project_dir=Path("."),
+            spec_dir=Path("."),
+            model=model,
+            agent_type="coder",
+            runtime=runtime_type,
+        )
+
+        async with runtime:
+            await runtime.query(prompt)
+
+            response_text = ""
+            async for msg in runtime.receive_response():
+                msg_type = type(msg).__name__
+                if msg_type == "AgentMessage":
+                    for block in msg.content:
+                        if block.type == BlockType.TEXT and block.text:
+                            response_text += block.text
+                elif msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            response_text += block.text
+
+            if response_text:
+                print(response_text)
+                sys.exit(0)
+
+        sys.exit(1)
+
+    except ImportError as e:
+        print(f"Import error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+asyncio.run(analyze_version())
 `;
   }
 

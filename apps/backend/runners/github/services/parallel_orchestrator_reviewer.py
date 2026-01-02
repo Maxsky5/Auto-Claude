@@ -29,7 +29,7 @@ from typing import Any
 from claude_agent_sdk import AgentDefinition
 
 try:
-    from ...core.client import create_client
+    from ...core.runtime import create_agent_runtime
     from ...phase_config import get_thinking_budget
     from ..context_gatherer import PRContext, _validate_git_ref
     from ..gh_client import GHClient
@@ -45,7 +45,7 @@ try:
     from .sdk_utils import process_sdk_stream
 except (ImportError, ValueError, SystemError):
     from context_gatherer import PRContext, _validate_git_ref
-    from core.client import create_client
+    from core.runtime import create_agent_runtime
     from gh_client import GHClient
     from models import (
         GitHubRunnerConfig,
@@ -484,7 +484,7 @@ The SDK will run invoked agents in parallel automatically.
         Returns:
             Configured SDK client instance
         """
-        return create_client(
+        return create_agent_runtime(
             project_dir=project_root,
             spec_dir=self.github_dir,
             model=model,

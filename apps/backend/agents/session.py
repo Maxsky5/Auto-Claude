@@ -4,12 +4,16 @@ Agent Session Management
 
 Handles running agent sessions and post-session processing including
 memory updates, recovery tracking, and Linear integration.
+
+Supports both Claude SDK (ClaudeSDKClient) and unified runtime abstraction
+(AgentRuntimeBase) for multi-provider compatibility.
 """
 
 import logging
 from pathlib import Path
+from typing import Any, Union
 
-from claude_agent_sdk import ClaudeSDKClient
+from core.runtime import AgentRuntimeBase, BlockType
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from insight_extractor import extract_session_insights
 from linear_updater import (
@@ -44,6 +48,37 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Type alias for clients that support unified runtime
+AgentClient = AgentRuntimeBase
+
+
+def _is_unified_runtime(client: AgentClient) -> bool:
+    return isinstance(client, AgentRuntimeBase)
+
+
+def _extract_tool_input_display(tool_input: dict[str, Any] | None) -> str | None:
+    if not tool_input or not isinstance(tool_input, dict):
+        return None
+    if "pattern" in tool_input:
+        return f"pattern: {tool_input['pattern']}"
+    elif "file_path" in tool_input:
+        fp = tool_input["file_path"]
+        if len(fp) > 50:
+            fp = "..." + fp[-47:]
+        return fp
+    elif "command" in tool_input:
+        cmd = tool_input["command"]
+        if len(cmd) > 50:
+            cmd = cmd[:47] + "..."
+        return cmd
+    elif "path" in tool_input:
+        return tool_input["path"]
+    return None
+
+
+def _get_runtime_name(client: AgentClient) -> str:
+    return client.get_runtime_name()
 
 
 async def post_session_processing(
@@ -312,7 +347,7 @@ async def post_session_processing(
 
 
 async def run_agent_session(
-    client: ClaudeSDKClient,
+    client: AgentClient,
     message: str,
     spec_dir: Path,
     verbose: bool = False,
@@ -334,6 +369,7 @@ async def run_agent_session(
         - "complete" if all subtasks complete
         - "error" if an error occurred
     """
+    runtime_name = _get_runtime_name(client)
     debug_section("session", f"Agent Session - {phase.value}")
     debug(
         "session",
@@ -342,8 +378,9 @@ async def run_agent_session(
         phase=phase.value,
         prompt_length=len(message),
         prompt_preview=message[:200] + "..." if len(message) > 200 else message,
+        runtime=runtime_name,
     )
-    print("Sending prompt to Claude Agent SDK...\n")
+    print(f"Sending prompt to {runtime_name}...\n")
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
@@ -369,15 +406,12 @@ async def run_agent_session(
                 msg_type=msg_type,
             )
 
-            # Handle AssistantMessage (text and tool use)
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+            # Handle AgentMessage (unified runtime abstraction)
+            if msg_type == "AgentMessage":
                 for block in msg.content:
-                    block_type = type(block).__name__
-
-                    if block_type == "TextBlock" and hasattr(block, "text"):
+                    if block.type == BlockType.TEXT and block.text:
                         response_text += block.text
                         print(block.text, end="", flush=True)
-                        # Log text to task logger (persist without double-printing)
                         if task_logger and block.text.strip():
                             task_logger.log(
                                 block.text,
@@ -385,39 +419,19 @@ async def run_agent_session(
                                 phase,
                                 print_to_console=False,
                             )
-                    elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                        tool_name = block.name
-                        tool_input_display = None
+                    elif block.type == BlockType.TOOL_USE:
+                        tool_name = block.tool_name or "unknown"
+                        tool_input_display = _extract_tool_input_display(
+                            block.tool_input
+                        )
                         tool_count += 1
-
-                        # Safely extract tool input (handles None, non-dict, etc.)
-                        inp = get_safe_tool_input(block)
-
-                        # Extract meaningful tool input for display
-                        if inp:
-                            if "pattern" in inp:
-                                tool_input_display = f"pattern: {inp['pattern']}"
-                            elif "file_path" in inp:
-                                fp = inp["file_path"]
-                                if len(fp) > 50:
-                                    fp = "..." + fp[-47:]
-                                tool_input_display = fp
-                            elif "command" in inp:
-                                cmd = inp["command"]
-                                if len(cmd) > 50:
-                                    cmd = cmd[:47] + "..."
-                                tool_input_display = cmd
-                            elif "path" in inp:
-                                tool_input_display = inp["path"]
 
                         debug(
                             "session",
                             f"Tool call #{tool_count}: {tool_name}",
                             tool_input=tool_input_display,
-                            full_input=str(inp)[:500] if inp else None,
                         )
 
-                        # Log tool start (handles printing too)
                         if task_logger:
                             task_logger.tool_start(
                                 tool_name,
@@ -428,42 +442,35 @@ async def run_agent_session(
                         else:
                             print(f"\n[Tool: {tool_name}]", flush=True)
 
-                        if verbose and hasattr(block, "input"):
-                            input_str = str(block.input)
+                        if verbose and block.tool_input:
+                            input_str = str(block.tool_input)
                             if len(input_str) > 300:
                                 print(f"   Input: {input_str[:300]}...", flush=True)
                             else:
                                 print(f"   Input: {input_str}", flush=True)
                         current_tool = tool_name
 
-            # Handle UserMessage (tool results)
-            elif msg_type == "UserMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
+                    elif block.type == BlockType.TOOL_RESULT:
+                        result_text = block.text or ""
+                        is_error = block.is_error or False
 
-                    if block_type == "ToolResultBlock":
-                        result_content = getattr(block, "content", "")
-                        is_error = getattr(block, "is_error", False)
-
-                        # Check if command was blocked by security hook
-                        if "blocked" in str(result_content).lower():
+                        if "blocked" in result_text.lower():
                             debug_error(
                                 "session",
                                 f"Tool BLOCKED: {current_tool}",
-                                result=str(result_content)[:300],
+                                result=result_text[:300],
                             )
-                            print(f"   [BLOCKED] {result_content}", flush=True)
+                            print(f"   [BLOCKED] {result_text}", flush=True)
                             if task_logger and current_tool:
                                 task_logger.tool_end(
                                     current_tool,
                                     success=False,
                                     result="BLOCKED",
-                                    detail=str(result_content),
+                                    detail=result_text,
                                     phase=phase,
                                 )
                         elif is_error:
-                            # Show errors (truncated)
-                            error_str = str(result_content)[:500]
+                            error_str = result_text[:500]
                             debug_error(
                                 "session",
                                 f"Tool error: {current_tool}",
@@ -471,29 +478,24 @@ async def run_agent_session(
                             )
                             print(f"   [Error] {error_str}", flush=True)
                             if task_logger and current_tool:
-                                # Store full error in detail for expandable view
                                 task_logger.tool_end(
                                     current_tool,
                                     success=False,
                                     result=error_str[:100],
-                                    detail=str(result_content),
+                                    detail=result_text,
                                     phase=phase,
                                 )
                         else:
-                            # Tool succeeded
                             debug_detailed(
                                 "session",
                                 f"Tool success: {current_tool}",
-                                result_length=len(str(result_content)),
+                                result_length=len(result_text),
                             )
                             if verbose:
-                                result_str = str(result_content)[:200]
-                                print(f"   [Done] {result_str}", flush=True)
+                                print(f"   [Done] {result_text[:200]}", flush=True)
                             else:
                                 print("   [Done]", flush=True)
                             if task_logger and current_tool:
-                                # Store full result in detail for expandable view (only for certain tools)
-                                # Skip storing for very large outputs like Glob results
                                 detail_content = None
                                 if current_tool in (
                                     "Read",
@@ -502,19 +504,14 @@ async def run_agent_session(
                                     "Edit",
                                     "Write",
                                 ):
-                                    result_str = str(result_content)
-                                    # Only store if not too large (detail truncation happens in logger)
-                                    if (
-                                        len(result_str) < 50000
-                                    ):  # 50KB max before truncation
-                                        detail_content = result_str
+                                    if len(result_text) < 50000:
+                                        detail_content = result_text
                                 task_logger.tool_end(
                                     current_tool,
                                     success=True,
                                     detail=detail_content,
                                     phase=phase,
                                 )
-
                         current_tool = None
 
         print("\n" + "-" * 70 + "\n")

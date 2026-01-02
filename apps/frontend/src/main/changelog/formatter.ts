@@ -1,9 +1,11 @@
 import type {
   ChangelogGenerationRequest,
   TaskSpecContent,
-  GitCommit
+  GitCommit,
+  AgentRuntime
 } from '../../shared/types';
 import { extractSpecOverview } from './parser';
+import { DEFAULT_FEATURE_MODELS_BY_BACKEND } from '../../shared/constants';
 
 /**
  * Format instructions for different changelog styles
@@ -317,46 +319,66 @@ CRITICAL: Output ONLY the raw changelog content. Do NOT include ANY introductory
 }
 
 /**
- * Create Python script for Claude generation
+ * Create Python script for AI generation (runtime-aware)
  */
-export function createGenerationScript(prompt: string, claudePath: string): string {
-  // Convert prompt to base64 to avoid any string escaping issues in Python
+export function createGenerationScript(prompt: string, claudePath: string, runtime: AgentRuntime = 'claude-code'): string {
   const base64Prompt = Buffer.from(prompt, 'utf-8').toString('base64');
 
-  // Escape the claude path for Python string
-  const escapedClaudePath = claudePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const model = DEFAULT_FEATURE_MODELS_BY_BACKEND[runtime].utility;
 
   return `
-import subprocess
+import asyncio
 import sys
 import base64
+from pathlib import Path
 
-try:
-    # Decode the base64 prompt to avoid string escaping issues
-    prompt = base64.b64decode('${base64Prompt}').decode('utf-8')
+sys.path.insert(0, str(Path(__file__).parent))
 
-    # Use Claude Code CLI to generate
-    # stdin=DEVNULL prevents hanging when claude checks for interactive input
-    result = subprocess.run(
-        ['${escapedClaudePath}', '-p', prompt, '--output-format', 'text', '--model', 'haiku'],
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-        timeout=300
-    )
+async def generate_changelog():
+    try:
+        from core.runtime import create_agent_runtime, BlockType
 
-    if result.returncode == 0:
-        print(result.stdout)
-    else:
-        # Print more detailed error info
-        print(f"Claude CLI error (code {result.returncode}):", file=sys.stderr)
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
-        if result.stdout:
-            print(f"stdout: {result.stdout}", file=sys.stderr)
+        prompt = base64.b64decode('${base64Prompt}').decode('utf-8')
+        runtime_type = "${runtime}"
+        model = "${model}"
+
+        runtime = create_agent_runtime(
+            project_dir=Path("."),
+            spec_dir=Path("."),
+            model=model,
+            agent_type="coder",
+            runtime=runtime_type,
+        )
+
+        async with runtime:
+            await runtime.query(prompt)
+
+            response_text = ""
+            async for msg in runtime.receive_response():
+                msg_type = type(msg).__name__
+                if msg_type == "AgentMessage":
+                    for block in msg.content:
+                        if block.type == BlockType.TEXT and block.text:
+                            response_text += block.text
+                elif msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            response_text += block.text
+
+            if response_text:
+                print(response_text)
+                sys.exit(0)
+
         sys.exit(1)
-except Exception as e:
-    print(f"Python error: {type(e).__name__}: {e}", file=sys.stderr)
-    sys.exit(1)
+
+    except ImportError as e:
+        print(f"Import error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+asyncio.run(generate_changelog())
 `;
 }

@@ -9,7 +9,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel
 } from './ui/dropdown-menu';
-import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
+import { AGENT_PROFILES_BY_BACKEND, getRuntimeConfig } from '../../shared/constants';
+import { useSettingsStore } from '../stores/settings-store';
+import { useAvailableModels } from '../hooks/useAvailableModels';
 import type { InsightsModelConfig } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
 
@@ -31,12 +33,19 @@ export function InsightsModelSelector({
   onConfigChange,
   disabled
 }: InsightsModelSelectorProps) {
+  const settings = useSettingsStore((state) => state.settings);
+  const { models: availableModels } = useAvailableModels(settings);
+  const backend = settings.agentRuntime || 'claude-code';
+  const runtimeConfig = getRuntimeConfig(backend);
+  const supportsThinking = runtimeConfig.supportsThinking;
+  const defaultAgentProfiles = AGENT_PROFILES_BY_BACKEND[backend] || AGENT_PROFILES_BY_BACKEND['claude-code'];
+
   const [showCustomModal, setShowCustomModal] = useState(false);
 
   // Default to 'balanced' if no config, or if 'auto' profile was selected (not applicable for insights)
   const rawProfileId = currentConfig?.profileId || 'balanced';
   const selectedProfileId = rawProfileId === 'auto' ? 'balanced' : rawProfileId;
-  const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === selectedProfileId);
+  const profile = defaultAgentProfiles.find(p => p.id === selectedProfileId);
 
   // Get the appropriate icon
   const Icon = selectedProfileId === 'custom'
@@ -49,7 +58,7 @@ export function InsightsModelSelector({
       return;
     }
 
-    const selected = DEFAULT_AGENT_PROFILES.find(p => p.id === profileId);
+    const selected = defaultAgentProfiles.find(p => p.id === profileId);
     if (selected) {
       onConfigChange({
         profileId: selected.id,
@@ -67,8 +76,8 @@ export function InsightsModelSelector({
   // Build display text for current selection
   const getDisplayText = () => {
     if (selectedProfileId === 'custom' && currentConfig) {
-      const modelLabel = AVAILABLE_MODELS.find(m => m.value === currentConfig.model)?.label || currentConfig.model;
-      return `${modelLabel} + ${currentConfig.thinkingLevel}`;
+      const modelLabel = availableModels.find(m => m.value === currentConfig.model)?.label || currentConfig.model;
+      return supportsThinking ? `${modelLabel} + ${currentConfig.thinkingLevel}` : modelLabel;
     }
     return profile?.name || 'Balanced';
   };
@@ -92,10 +101,10 @@ export function InsightsModelSelector({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel>Agent Profile</DropdownMenuLabel>
-          {DEFAULT_AGENT_PROFILES.filter(p => !p.isAutoProfile).map((p) => {
+          {defaultAgentProfiles.filter(p => !p.isAutoProfile).map((p) => {
             const ProfileIcon = iconMap[p.icon || 'Brain'];
             const isSelected = selectedProfileId === p.id;
-            const modelLabel = AVAILABLE_MODELS.find(m => m.value === p.model)?.label;
+            const modelLabel = availableModels.find(m => m.value === p.model)?.label;
             return (
               <DropdownMenuItem
                 key={p.id}
@@ -106,7 +115,7 @@ export function InsightsModelSelector({
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{p.name}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {modelLabel} + {p.thinkingLevel}
+                    {supportsThinking ? `${modelLabel} + ${p.thinkingLevel}` : modelLabel}
                   </div>
                 </div>
                 {isSelected && (

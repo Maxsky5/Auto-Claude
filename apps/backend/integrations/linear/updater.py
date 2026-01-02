@@ -27,7 +27,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+from core.runtime import AgentRuntimeBase, BlockType, create_agent_runtime
+from core.runtime.types import RuntimeType
 
 # Linear status constants (matching Valma AI team setup)
 STATUS_TODO = "Todo"
@@ -108,14 +109,13 @@ def get_linear_api_key() -> str:
     return os.environ.get("LINEAR_API_KEY", "")
 
 
-def _create_linear_client() -> ClaudeSDKClient:
+def _create_linear_client(spec_dir: Path) -> AgentRuntimeBase:
     """
     Create a minimal Claude client with only Linear MCP tools.
     Used for focused mini-agent calls.
     """
     from core.auth import (
         ensure_claude_code_oauth_token,
-        get_sdk_env_vars,
         require_auth_token,
     )
     from phase_config import resolve_model_id
@@ -127,38 +127,43 @@ def _create_linear_client() -> ClaudeSDKClient:
     if not linear_api_key:
         raise ValueError("LINEAR_API_KEY not set")
 
-    sdk_env = get_sdk_env_vars()
+    project_dir = spec_dir.parent.parent  # Assuming spec_dir is .auto-claude/specs/xxx
 
-    return ClaudeSDKClient(
-        options=ClaudeAgentOptions(
-            model=resolve_model_id("haiku"),  # Resolves via API Profile if configured
-            system_prompt="You are a Linear API assistant. Execute the requested Linear operation precisely.",
-            allowed_tools=LINEAR_TOOLS,
-            mcp_servers={
-                "linear": {
-                    "type": "http",
-                    "url": "https://mcp.linear.app/mcp",
-                    "headers": {"Authorization": f"Bearer {linear_api_key}"},
-                }
-            },
-            max_turns=10,  # Should complete in 1-3 turns
-            env=sdk_env,  # Pass ANTHROPIC_BASE_URL etc. to subprocess
-        )
+    return create_agent_runtime(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        model="claude-haiku-4-5",  # Fast & cheap model for simple API calls
+        agent_type="linear_updater",
+        system_prompt="You are a Linear API assistant. Execute the requested Linear operation precisely.",
+        allowed_tools=LINEAR_TOOLS,
+        mcp_servers={
+            "linear": {
+                "type": "http",
+                "url": "https://mcp.linear.app/mcp",
+                "headers": {"Authorization": f"Bearer {linear_api_key}"},
+            }
+        },
+        max_turns=10,  # Should complete in 1-3 turns
     )
 
 
-async def _run_linear_agent(prompt: str) -> str | None:
+async def _run_linear_agent(prompt: str, spec_dir: Path | None = None) -> str | None:
     """
     Run a focused mini-agent for a Linear operation.
 
     Args:
         prompt: The focused prompt for the Linear operation
+        spec_dir: Spec directory (required for creating client)
 
     Returns:
         The response text, or None if failed
     """
+    if not spec_dir:
+        print("Error: spec_dir required for Linear agent")
+        return None
+
     try:
-        client = _create_linear_client()
+        client = _create_linear_client(spec_dir)
 
         async with client:
             await client.query(prompt)
@@ -166,10 +171,9 @@ async def _run_linear_agent(prompt: str) -> str | None:
             response_text = ""
             async for msg in client.receive_response():
                 msg_type = type(msg).__name__
-                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                if msg_type == "AgentMessage":
                     for block in msg.content:
-                        block_type = type(block).__name__
-                        if block_type == "TextBlock" and hasattr(block, "text"):
+                        if block.type == BlockType.TEXT and block.text:
                             response_text += block.text
 
             return response_text
@@ -224,7 +228,7 @@ TASK_ID: [the issue ID]
 TEAM_ID: [the team ID]
 """
 
-    response = await _run_linear_agent(prompt)
+    response = await _run_linear_agent(prompt, spec_dir)
     if not response:
         return None
 
@@ -293,7 +297,7 @@ async def update_linear_status(
 Confirm when done.
 """
 
-    response = await _run_linear_agent(prompt)
+    response = await _run_linear_agent(prompt, spec_dir)
     if response:
         state.status = new_status
         state.save(spec_dir)
@@ -337,7 +341,7 @@ Use mcp__linear-server__create_comment with:
 Confirm when done.
 """
 
-    response = await _run_linear_agent(prompt)
+    response = await _run_linear_agent(prompt, spec_dir)
     if response:
         print(f"Added comment to Linear task {state.task_id}")
         return True

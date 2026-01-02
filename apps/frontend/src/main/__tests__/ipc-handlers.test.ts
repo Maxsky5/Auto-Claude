@@ -473,7 +473,7 @@ describe('IPC Handlers', { timeout: 15000 }, () => {
       const result = await ipcMain.invokeHandler(
         'settings:save',
         {},
-        { theme: 'dark', defaultModel: 'opus' }
+        { theme: 'dark', defaultModel: 'opus', _migratedDefaultModelSync: true }
       );
 
       expect(result).toEqual({ success: true });

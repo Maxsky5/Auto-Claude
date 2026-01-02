@@ -187,6 +187,14 @@ export function Insights({ projectId }: InsightsProps) {
     // If we have a session, persist the config
     if (session?.id) {
       await updateModelConfig(projectId, session.id, config);
+    } else {
+      // No session yet - create one first so we can save the preference
+      await newSession(projectId);
+      // Get the newly created session ID from store
+      const newSessionId = useInsightsStore.getState().session?.id;
+      if (newSessionId) {
+        await updateModelConfig(projectId, newSessionId, config);
+      }
     }
   };
 

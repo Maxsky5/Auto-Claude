@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
-import type { IPCResult, TaskStartOptions, TaskStatus } from '../../../shared/types';
+import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir, getRuntimeConfig } from '../../../shared/constants';
+import type { IPCResult, TaskStartOptions, TaskStatus, AppSettings } from '../../../shared/types';
 import path from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'fs';
 import { spawnSync } from 'child_process';
@@ -9,6 +9,7 @@ import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
 import { checkGitStatus } from '../../project-initializer';
 import { getClaudeProfileManager } from '../../claude-profile-manager';
+import { readSettingsFile } from '../../settings-utils';
 import {
   getPlanPath,
   persistPlanStatus,
@@ -128,8 +129,12 @@ export function registerTaskExecutionHandlers(
       }
 
       // Check authentication - Claude requires valid auth to run tasks
+      // Skip check if runtime doesn't require Claude auth
+      const settings = readSettingsFile() as AppSettings | undefined;
+      const runtimeConfig = getRuntimeConfig(settings?.agentRuntime || 'claude-code');
+      
       const profileManager = getClaudeProfileManager();
-      if (!profileManager.hasValidAuth()) {
+      if (runtimeConfig.requiresAuth && !profileManager.hasValidAuth()) {
         console.warn('[TASK_START] No valid authentication for active profile');
         mainWindow.webContents.send(
           IPC_CHANNELS.TASK_ERROR,
@@ -542,8 +547,12 @@ export function registerTaskExecutionHandlers(
           }
 
           // Check authentication before auto-starting
+          // Skip check if runtime doesn't require Claude auth
+          const settings = readSettingsFile() as AppSettings | undefined;
+          const runtimeConfig = getRuntimeConfig(settings?.agentRuntime || 'claude-code');
+
           const profileManager = getClaudeProfileManager();
-          if (!profileManager.hasValidAuth()) {
+          if (runtimeConfig.requiresAuth && !profileManager.hasValidAuth()) {
             console.warn('[TASK_UPDATE_STATUS] No valid authentication for active profile');
             if (mainWindow) {
               mainWindow.webContents.send(
@@ -834,8 +843,12 @@ export function registerTaskExecutionHandlers(
           }
 
           // Check authentication before auto-restarting
+          // Skip check if runtime doesn't require Claude auth
+          const settings = readSettingsFile() as AppSettings | undefined;
+          const runtimeConfig = getRuntimeConfig(settings?.agentRuntime || 'claude-code');
+
           const profileManager = getClaudeProfileManager();
-          if (!profileManager.hasValidAuth()) {
+          if (runtimeConfig.requiresAuth && !profileManager.hasValidAuth()) {
             console.warn('[Recovery] Auth check failed, cannot auto-restart task');
             // Recovery succeeded but we can't restart without auth
             return {

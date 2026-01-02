@@ -6,8 +6,8 @@ import { AgentState } from './agent-state';
 import { AgentEvents } from './agent-events';
 import { AgentProcessManager } from './agent-process';
 import { RoadmapConfig } from './types';
-import type { IdeationConfig, Idea } from '../../shared/types';
-import { MODEL_ID_MAP } from '../../shared/constants';
+import type { IdeationConfig, Idea, AppSettings } from '../../shared/types';
+import { readSettingsFile } from '../settings-utils';
 import { detectRateLimit, createSDKRateLimitInfo, getProfileEnv } from '../rate-limit-detector';
 import { getAPIProfileEnv } from '../services/profile';
 import { getOAuthModeClearVars } from './env-utils';
@@ -95,10 +95,14 @@ export class AgentQueueManager {
       args.push('--refresh-competitor-analysis');
     }
 
+    // Get runtime settings
+    const settings = readSettingsFile() as AppSettings | undefined;
+    const runtime = settings?.agentRuntime || 'claude-code';
+    args.push('--runtime', runtime);
+
     // Add model and thinking level from config
     if (config?.model) {
-      const modelId = MODEL_ID_MAP[config.model] || MODEL_ID_MAP['opus'];
-      args.push('--model', modelId);
+      args.push('--model', config.model);
     }
     if (config?.thinkingLevel) {
       args.push('--thinking-level', config.thinkingLevel);
@@ -171,10 +175,14 @@ export class AgentQueueManager {
       args.push('--append');
     }
 
+    // Get runtime settings
+    const settings = readSettingsFile() as AppSettings | undefined;
+    const runtime = settings?.agentRuntime || 'claude-code';
+    args.push('--runtime', runtime);
+
     // Add model and thinking level from config
     if (config.model) {
-      const modelId = MODEL_ID_MAP[config.model] || MODEL_ID_MAP['opus'];
-      args.push('--model', modelId);
+      args.push('--model', config.model);
     }
     if (config.thinkingLevel) {
       args.push('--thinking-level', config.thinkingLevel);

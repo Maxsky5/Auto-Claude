@@ -54,6 +54,7 @@ import { useProjectStore, loadProjects, addProject, initializeProject, removePro
 import { useTaskStore, loadTasks } from './stores/task-store';
 import { useSettingsStore, loadSettings, loadProfiles } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
+import { loadRuntimeAvailability } from './stores/runtime-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
 import { initializeGitHubListeners } from './stores/github';
 import { initDownloadProgressListener } from './stores/download-store';
@@ -168,6 +169,7 @@ export function App() {
     loadProjects();
     loadSettings();
     loadProfiles();
+    loadRuntimeAvailability();
     // Initialize global GitHub listeners (PR reviews, etc.) so they persist across navigation
     initializeGitHubListeners();
     // Initialize global download progress listener for Ollama model downloads

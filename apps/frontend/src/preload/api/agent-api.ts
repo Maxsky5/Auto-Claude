@@ -21,6 +21,7 @@ import { createGitHubAPI, GitHubAPI } from './modules/github-api';
 import { createGitLabAPI, GitLabAPI } from './modules/gitlab-api';
 import { createAutoBuildAPI, AutoBuildAPI } from './modules/autobuild-api';
 import { createShellAPI, ShellAPI } from './modules/shell-api';
+import { createBackendAPI, BackendAPI } from './modules/backend-api';
 
 /**
  * Combined Agent API interface
@@ -35,7 +36,8 @@ export interface AgentAPI extends
   GitHubAPI,
   GitLabAPI,
   AutoBuildAPI,
-  ShellAPI {}
+  ShellAPI,
+  BackendAPI {}
 
 /**
  * Creates the complete Agent API by combining all module APIs
@@ -52,38 +54,22 @@ export const createAgentAPI = (): AgentAPI => {
   const gitlabAPI = createGitLabAPI();
   const autobuildAPI = createAutoBuildAPI();
   const shellAPI = createShellAPI();
+  const backendAPI = createBackendAPI();
 
   return {
-    // Roadmap API
     ...roadmapAPI,
-
-    // Ideation API
     ...ideationAPI,
-
-    // Insights API
     ...insightsAPI,
-
-    // Changelog API
     ...changelogAPI,
-
-    // Linear Integration API
     ...linearAPI,
-
-    // GitHub Integration API
     ...githubAPI,
-
-    // GitLab Integration API
     ...gitlabAPI,
-
-    // Auto-Build Source Update API
     ...autobuildAPI,
-
-    // Shell Operations API
-    ...shellAPI
+    ...shellAPI,
+    ...backendAPI
   };
 };
 
-// Re-export individual API interfaces for consumers who need them
 export type {
   RoadmapAPI,
   IdeationAPI,
@@ -93,5 +79,6 @@ export type {
   GitHubAPI,
   GitLabAPI,
   AutoBuildAPI,
-  ShellAPI
+  ShellAPI,
+  BackendAPI
 };

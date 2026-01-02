@@ -73,12 +73,14 @@ class AgentExecutor:
         model: str,
         create_client_func,
         thinking_budget: int | None = None,
+        runtime: str = "claude-code",
     ):
         self.project_dir = project_dir
         self.output_dir = output_dir
         self.model = model
         self.create_client = create_client_func
         self.thinking_budget = thinking_budget
+        self.runtime = runtime
         # Go up from roadmap/ -> runners/ -> auto-claude/prompts/
         self.prompts_dir = Path(__file__).parent.parent.parent / "prompts"
 
@@ -125,6 +127,7 @@ class AgentExecutor:
             "Creating Claude client",
             project_dir=str(self.project_dir),
             model=self.model,
+            runtime=self.runtime,
             thinking_budget=self.thinking_budget,
         )
         client = self.create_client(
@@ -132,6 +135,7 @@ class AgentExecutor:
             self.output_dir,
             self.model,
             max_thinking_tokens=self.thinking_budget,
+            runtime=self.runtime,
         )
 
         try:

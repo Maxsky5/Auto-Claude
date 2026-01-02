@@ -14,7 +14,7 @@ from pathlib import Path
 
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
-from claude_agent_sdk import ClaudeSDKClient
+from core.runtime import AgentRuntimeBase, BlockType
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from prompts_pkg import get_qa_reviewer_prompt
 from security.tool_input_validator import get_safe_tool_input
@@ -32,7 +32,7 @@ from .criteria import get_qa_signoff_status
 
 
 async def run_qa_agent_session(
-    client: ClaudeSDKClient,
+    client: AgentRuntimeBase,
     project_dir: Path,
     spec_dir: Path,
     qa_session: int,
@@ -44,7 +44,7 @@ async def run_qa_agent_session(
     Run a QA reviewer agent session.
 
     Args:
-        client: Claude SDK client
+        client: Agent runtime instance
         project_dir: Project root directory (for capability detection)
         spec_dir: Spec directory
         qa_session: QA iteration number
@@ -199,14 +199,11 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                 msg_type=msg_type,
             )
 
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+            if msg_type == "AgentMessage":
                 for block in msg.content:
-                    block_type = type(block).__name__
-
-                    if block_type == "TextBlock" and hasattr(block, "text"):
+                    if block.type == BlockType.TEXT and block.text:
                         response_text += block.text
                         print(block.text, end="", flush=True)
-                        # Log text to task logger (persist without double-printing)
                         if task_logger and block.text.strip():
                             task_logger.log(
                                 block.text,
@@ -214,16 +211,13 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                                 LogPhase.VALIDATION,
                                 print_to_console=False,
                             )
-                    elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                        tool_name = block.name
+                    elif block.type == BlockType.TOOL_USE:
+                        tool_name = block.tool_name or "unknown"
                         tool_input_display = None
                         tool_count += 1
 
-                        # Safely extract tool input (handles None, non-dict, etc.)
-                        inp = get_safe_tool_input(block)
-
-                        # Extract tool input for display
-                        if inp:
+                        if block.tool_input and isinstance(block.tool_input, dict):
+                            inp = block.tool_input
                             if "file_path" in inp:
                                 fp = inp["file_path"]
                                 if len(fp) > 50:
@@ -238,7 +232,6 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                             tool_input=tool_input_display,
                         )
 
-                        # Log tool start (handles printing)
                         if task_logger:
                             task_logger.tool_start(
                                 tool_name,
@@ -249,21 +242,17 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                         else:
                             print(f"\n[QA Tool: {tool_name}]", flush=True)
 
-                        if verbose and hasattr(block, "input"):
-                            input_str = str(block.input)
+                        if verbose and block.tool_input:
+                            input_str = str(block.tool_input)
                             if len(input_str) > 300:
                                 print(f"   Input: {input_str[:300]}...", flush=True)
                             else:
                                 print(f"   Input: {input_str}", flush=True)
                         current_tool = tool_name
 
-            elif msg_type == "UserMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
-
-                    if block_type == "ToolResultBlock":
-                        is_error = getattr(block, "is_error", False)
-                        result_content = getattr(block, "content", "")
+                    elif block.type == BlockType.TOOL_RESULT:
+                        is_error = block.is_error or False
+                        result_content = block.text or ""
 
                         if is_error:
                             debug_error(
@@ -274,7 +263,6 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                             error_str = str(result_content)[:500]
                             print(f"   [Error] {error_str}", flush=True)
                             if task_logger and current_tool:
-                                # Store full error in detail for expandable view
                                 task_logger.tool_end(
                                     current_tool,
                                     success=False,
@@ -294,7 +282,6 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                             else:
                                 print("   [Done]", flush=True)
                             if task_logger and current_tool:
-                                # Store full result in detail for expandable view
                                 detail_content = None
                                 if current_tool in (
                                     "Read",

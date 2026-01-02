@@ -6,12 +6,14 @@ import { AgentEvents } from './agent-events';
 import { AgentProcessManager } from './agent-process';
 import { AgentQueueManager } from './agent-queue';
 import { getClaudeProfileManager } from '../claude-profile-manager';
+import { readSettingsFile } from '../settings-utils';
+import { getRuntimeConfig } from '../../shared/constants';
+import type { AppSettings, IdeationConfig } from '../../shared/types';
 import {
   SpecCreationMetadata,
   TaskExecutionOptions,
   RoadmapConfig
 } from './types';
-import type { IdeationConfig } from '../../shared/types';
 
 /**
  * Main AgentManager - orchestrates agent process lifecycle
@@ -96,8 +98,11 @@ export class AgentManager extends EventEmitter {
     baseBranch?: string
   ): Promise<void> {
     // Pre-flight auth check: Verify active profile has valid authentication
+    const settings = readSettingsFile() as AppSettings | undefined;
+    const runtimeConfig = getRuntimeConfig(settings?.agentRuntime || 'claude-code');
+
     const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
+    if (runtimeConfig.requiresAuth && !profileManager.hasValidAuth()) {
       this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
       return;
     }
@@ -122,6 +127,9 @@ export class AgentManager extends EventEmitter {
     // spec_runner.py will auto-start run.py after spec creation completes
     const args = [specRunnerPath, '--task', taskDescription, '--project-dir', projectPath];
 
+    // Always pass runtime selection explicitly
+    args.push('--runtime', settings?.agentRuntime || 'claude-code');
+
     // Pass spec directory if provided (for UI-created tasks that already have a directory)
     if (specDir) {
       args.push('--spec-dir', specDir);
@@ -140,12 +148,12 @@ export class AgentManager extends EventEmitter {
 
     // Pass model and thinking level configuration
     // For auto profile, use phase-specific config; otherwise use single model/thinking
+    const runtime = settings?.agentRuntime || 'claude-code';
+
     if (metadata?.isAutoProfile && metadata.phaseModels && metadata.phaseThinking) {
-      // Pass the spec phase model and thinking level to spec_runner
       args.push('--model', metadata.phaseModels.spec);
       args.push('--thinking-level', metadata.phaseThinking.spec);
     } else if (metadata?.model) {
-      // Non-auto profile: use single model and thinking level
       args.push('--model', metadata.model);
       if (metadata.thinkingLevel) {
         args.push('--thinking-level', metadata.thinkingLevel);
@@ -169,8 +177,11 @@ export class AgentManager extends EventEmitter {
     options: TaskExecutionOptions = {}
   ): Promise<void> {
     // Pre-flight auth check: Verify active profile has valid authentication
+    const settings = readSettingsFile() as AppSettings | undefined;
+    const runtimeConfig = getRuntimeConfig(settings?.agentRuntime || 'claude-code');
+
     const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
+    if (runtimeConfig.requiresAuth && !profileManager.hasValidAuth()) {
       this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
       return;
     }
@@ -193,6 +204,9 @@ export class AgentManager extends EventEmitter {
     const combinedEnv = this.processManager.getCombinedEnv(projectPath);
 
     const args = [runPath, '--spec', specId, '--project-dir', projectPath];
+
+    // Always pass runtime selection explicitly
+    args.push('--runtime', settings?.agentRuntime || 'claude-code');
 
     // Always use auto-continue when running from UI (non-interactive)
     args.push('--auto-continue');
@@ -242,6 +256,10 @@ export class AgentManager extends EventEmitter {
     const combinedEnv = this.processManager.getCombinedEnv(projectPath);
 
     const args = [runPath, '--spec', specId, '--project-dir', projectPath, '--qa'];
+
+    // Always pass backend selection explicitly
+    const settings = readSettingsFile() as AppSettings | undefined;
+    args.push('--runtime', settings?.agentRuntime || 'claude-code');
 
     await this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'qa-process');
   }

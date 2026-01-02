@@ -6,6 +6,9 @@ import { EventEmitter } from 'events';
 import { detectRateLimit, createSDKRateLimitInfo, getProfileEnv } from './rate-limit-detector';
 import { parsePythonCommand } from './python-detector';
 import { pythonEnvManager } from './python-env-manager';
+import { readSettingsFile } from './settings-utils';
+import { getRuntimeConfig } from '../shared/constants';
+import type { AppSettings } from '../shared/types';
 
 /**
  * Debug logging - only logs when DEBUG=true or in development mode
@@ -255,58 +258,64 @@ Output ONLY the name (2-3 words), nothing else. Examples: "npm build", "git logs
     return prompt;
   }
 
-  /**
-   * Create the Python script to generate terminal name using Claude Agent SDK
-   */
+  private getRuntime(): 'claude-code' | 'opencode' {
+    const settings = readSettingsFile() as AppSettings | undefined;
+    return settings?.agentRuntime || 'claude-code';
+  }
+
   private createGenerationScript(prompt: string): string {
-    // Escape the prompt for Python string - use JSON.stringify for safe escaping
     const escapedPrompt = JSON.stringify(prompt);
+    const runtime = this.getRuntime();
+    const runtimeConfig = getRuntimeConfig(runtime);
+    const model = runtimeConfig.fastModel;
 
     return `
 import asyncio
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
 
 async def generate_name():
     try:
-        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+        from core.runtime import create_agent_runtime, BlockType
 
         prompt = ${escapedPrompt}
+        runtime_type = "${runtime}"
+        model = "${model}"
 
-        # Create a minimal client for simple text generation (no tools needed)
-        client = ClaudeSDKClient(
-            options=ClaudeAgentOptions(
-                model="claude-haiku-4-5",
-                system_prompt="You generate very short, concise terminal names (2-3 words MAX). Output ONLY the name, nothing else. No quotes, no explanation, no preamble. Keep it as short as possible while being descriptive.",
-                max_turns=1,
-            )
+        runtime = create_agent_runtime(
+            project_dir=Path("."),
+            spec_dir=Path("."),
+            model=model,
+            agent_type="coder",
+            runtime=runtime_type,
         )
 
-        async with client:
-            # Send the query
-            await client.query(prompt)
+        async with runtime:
+            await runtime.query(prompt)
 
-            # Collect response text from AssistantMessage
             response_text = ""
-            async for msg in client.receive_response():
+            async for msg in runtime.receive_response():
                 msg_type = type(msg).__name__
-                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                if msg_type == "AgentMessage":
+                    for block in msg.content:
+                        if block.type == BlockType.TEXT and block.text:
+                            response_text += block.text
+                elif msg_type == "AssistantMessage" and hasattr(msg, "content"):
                     for block in msg.content:
                         block_type = type(block).__name__
                         if block_type == "TextBlock" and hasattr(block, "text"):
                             response_text += block.text
 
             if response_text:
-                # Clean up the result
                 name = response_text.strip()
-                # Remove any quotes
                 name = name.strip('"').strip("'")
-                # Take first line only
                 name = name.split('\\n')[0].strip()
                 if name:
                     print(name)
                     sys.exit(0)
 
-        # If we get here, no valid response
         sys.exit(1)
 
     except ImportError as e:

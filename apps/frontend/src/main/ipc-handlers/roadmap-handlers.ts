@@ -1,6 +1,6 @@
 import { ipcMain, app } from 'electron';
 import type { BrowserWindow } from 'electron';
-import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING } from '../../shared/constants';
+import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_MODELS_BY_BACKEND, DEFAULT_FEATURE_THINKING } from '../../shared/constants';
 import type { IPCResult, Roadmap, RoadmapFeature, RoadmapFeatureStatus, RoadmapGenerationStatus, Task, TaskMetadata, CompetitorAnalysis, AppSettings } from '../../shared/types';
 import type { RoadmapConfig } from '../agent/types';
 import path from 'path';
@@ -19,9 +19,11 @@ function getFeatureSettings(): { model?: string; thinkingLevel?: string } {
     if (existsSync(settingsPath)) {
       const content = readFileSync(settingsPath, 'utf-8');
       const settings: AppSettings = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(content) };
+      const backend = settings.agentRuntime || 'claude-code';
+      const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND[backend] || DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
 
       // Get roadmap-specific settings
-      const featureModels = settings.featureModels || DEFAULT_FEATURE_MODELS;
+      const featureModels = settings.featureModels || defaultFeatureModels;
       const featureThinking = settings.featureThinking || DEFAULT_FEATURE_THINKING;
 
       return {
@@ -34,8 +36,9 @@ function getFeatureSettings(): { model?: string; thinkingLevel?: string } {
   }
 
   // Return defaults if settings file doesn't exist or fails to parse
+  const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
   return {
-    model: DEFAULT_FEATURE_MODELS.roadmap,
+    model: defaultFeatureModels.roadmap,
     thinkingLevel: DEFAULT_FEATURE_THINKING.roadmap
   };
 }

@@ -6,7 +6,7 @@ import type { IpcMainEvent, IpcMainInvokeEvent, BrowserWindow } from 'electron';
 import { app } from 'electron';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
-import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING } from '../../../shared/constants';
+import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_MODELS_BY_BACKEND, DEFAULT_FEATURE_THINKING } from '../../../shared/constants';
 import type { IPCResult, IdeationConfig, IdeationGenerationStatus, AppSettings } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import type { AgentManager } from '../../agent';
@@ -22,9 +22,11 @@ function getIdeationFeatureSettings(): { model?: string; thinkingLevel?: string 
     if (existsSync(settingsPath)) {
       const content = readFileSync(settingsPath, 'utf-8');
       const settings: AppSettings = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(content) };
+      const backend = settings.agentRuntime || 'claude-code';
+      const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND[backend] || DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
 
       // Get ideation-specific settings
-      const featureModels = settings.featureModels || DEFAULT_FEATURE_MODELS;
+      const featureModels = settings.featureModels || defaultFeatureModels;
       const featureThinking = settings.featureThinking || DEFAULT_FEATURE_THINKING;
 
       return {
@@ -37,8 +39,9 @@ function getIdeationFeatureSettings(): { model?: string; thinkingLevel?: string 
   }
 
   // Return defaults if settings file doesn't exist or fails to parse
+  const defaultFeatureModels = DEFAULT_FEATURE_MODELS_BY_BACKEND['claude-code'];
   return {
-    model: DEFAULT_FEATURE_MODELS.ideation,
+    model: defaultFeatureModels.ideation,
     thinkingLevel: DEFAULT_FEATURE_THINKING.ideation
   };
 }

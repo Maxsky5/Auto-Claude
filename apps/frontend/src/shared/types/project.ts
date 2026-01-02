@@ -281,6 +281,9 @@ export interface ProjectEnvConfig {
   // Model Override
   autoBuildModel?: string;
 
+  // Agent Runtime Selection
+  agentRuntime?: 'claude-code' | 'opencode';
+
   // Linear Integration
   linearEnabled: boolean;
   linearApiKey?: string;

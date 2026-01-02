@@ -65,8 +65,8 @@ import {
   TASK_IMPACT_LABELS,
   MAX_IMAGES_PER_TASK,
   ALLOWED_IMAGE_TYPES_DISPLAY,
-  DEFAULT_AGENT_PROFILES,
-  DEFAULT_PHASE_MODELS,
+  AGENT_PROFILES_BY_BACKEND,
+  DEFAULT_PHASE_MODELS_BY_BACKEND,
   DEFAULT_PHASE_THINKING
 } from '../../shared/constants';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
@@ -89,9 +89,13 @@ interface TaskEditDialogProps {
 export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDialogProps) {
   // Get selected agent profile from settings for defaults
   const { settings } = useSettingsStore();
-  const selectedProfile = DEFAULT_AGENT_PROFILES.find(
+  const backend = settings.agentRuntime || 'claude-code';
+  const defaultAgentProfiles = AGENT_PROFILES_BY_BACKEND[backend] || AGENT_PROFILES_BY_BACKEND['claude-code'];
+  const defaultPhaseModels = DEFAULT_PHASE_MODELS_BY_BACKEND[backend] || DEFAULT_PHASE_MODELS_BY_BACKEND['claude-code'];
+
+  const selectedProfile = defaultAgentProfiles.find(
     p => p.id === settings.selectedAgentProfile
-  ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
+  ) || defaultAgentProfiles.find(p => p.id === 'auto')!;
 
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
@@ -118,7 +122,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     const taskThinking = task.metadata?.thinkingLevel;
     if (taskModel && taskThinking) {
       // Check if it matches a known profile
-      const matchingProfile = DEFAULT_AGENT_PROFILES.find(
+      const matchingProfile = defaultAgentProfiles.find(
         p => p.model === taskModel && p.thinkingLevel === taskThinking && !p.isAutoProfile
       );
       return matchingProfile?.id || 'custom';
@@ -131,7 +135,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
   );
   // Auto profile - per-phase configuration
   const [phaseModels, setPhaseModels] = useState<PhaseModelConfig | undefined>(
-    task.metadata?.phaseModels || selectedProfile.phaseModels || DEFAULT_PHASE_MODELS
+    task.metadata?.phaseModels || selectedProfile.phaseModels || defaultPhaseModels
   );
   const [phaseThinking, setPhaseThinking] = useState<PhaseThinkingConfig | undefined>(
     task.metadata?.phaseThinking || selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING
@@ -170,22 +174,22 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
         setProfileId('auto');
         setModel(taskModel || selectedProfile.model);
         setThinkingLevel(taskThinking || selectedProfile.thinkingLevel);
-        setPhaseModels(task.metadata?.phaseModels || DEFAULT_PHASE_MODELS);
+        setPhaseModels(task.metadata?.phaseModels || defaultPhaseModels);
         setPhaseThinking(task.metadata?.phaseThinking || DEFAULT_PHASE_THINKING);
       } else if (taskModel && taskThinking) {
-        const matchingProfile = DEFAULT_AGENT_PROFILES.find(
+        const matchingProfile = defaultAgentProfiles.find(
           p => p.model === taskModel && p.thinkingLevel === taskThinking && !p.isAutoProfile
         );
         setProfileId(matchingProfile?.id || 'custom');
         setModel(taskModel);
         setThinkingLevel(taskThinking);
-        setPhaseModels(DEFAULT_PHASE_MODELS);
+        setPhaseModels(defaultPhaseModels);
         setPhaseThinking(DEFAULT_PHASE_THINKING);
       } else {
         setProfileId(settings.selectedAgentProfile || 'auto');
         setModel(selectedProfile.model);
         setThinkingLevel(selectedProfile.thinkingLevel);
-        setPhaseModels(selectedProfile.phaseModels || DEFAULT_PHASE_MODELS);
+        setPhaseModels(selectedProfile.phaseModels || defaultPhaseModels);
         setPhaseThinking(selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING);
       }
 

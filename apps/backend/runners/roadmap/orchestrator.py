@@ -8,7 +8,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from client import create_client
+from core.runtime import create_agent_runtime
 from debug import debug, debug_error, debug_section, debug_success
 from init import init_auto_claude_dir
 from phase_config import get_thinking_budget
@@ -32,6 +32,7 @@ class RoadmapOrchestrator:
         refresh: bool = False,
         enable_competitor_analysis: bool = False,
         refresh_competitor_analysis: bool = False,
+        runtime: str = "claude-code",
     ):
         self.project_dir = Path(project_dir)
         self.model = model
@@ -40,6 +41,7 @@ class RoadmapOrchestrator:
         self.refresh = refresh
         self.enable_competitor_analysis = enable_competitor_analysis
         self.refresh_competitor_analysis = refresh_competitor_analysis
+        self.runtime = runtime
 
         # Default output to project's .auto-claude directory (installed instance)
         # Note: auto-claude/ is source code, .auto-claude/ is the installed instance
@@ -58,8 +60,9 @@ class RoadmapOrchestrator:
             self.project_dir,
             self.output_dir,
             self.model,
-            create_client,
+            create_agent_runtime,
             self.thinking_budget,
+            self.runtime,
         )
 
         # Initialize phase handlers
