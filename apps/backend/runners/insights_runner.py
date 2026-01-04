@@ -273,7 +273,7 @@ Current question: {message}"""
                                 "Text block",
                                 text_length=len(block.text),
                             )
-                            print(block.text, flush=True)
+                            print(block.text, end="", flush=True)
                             response_text += block.text
                         elif block.type == BlockType.TOOL_USE:
                             tool_name = block.tool_name or "unknown"

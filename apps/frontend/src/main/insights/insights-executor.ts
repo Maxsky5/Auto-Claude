@@ -134,30 +134,36 @@ export class InsightsExecutor extends EventEmitter {
       const toolsUsed: InsightsToolUsage[] = [];
       let allInsightsOutput = '';
       let stderrOutput = '';
+      let lineBuffer = '';
+
+      const processLine = (line: string) => {
+        if (line.startsWith('__TASK_SUGGESTION__:')) {
+          this.handleTaskSuggestion(projectId, line, (task) => {
+            suggestedTask = task;
+          });
+        } else if (line.startsWith('__TOOL_START__:')) {
+          this.handleToolStart(projectId, line, toolsUsed);
+        } else if (line.startsWith('__TOOL_END__:')) {
+          this.handleToolEnd(projectId, line);
+        } else if (line.trim()) {
+          fullResponse += line + '\n';
+          this.emit('stream-chunk', projectId, {
+            type: 'text',
+            content: line + '\n'
+          } as InsightsStreamChunk);
+        }
+      };
 
       proc.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
-        // Collect output for rate limit detection (keep last 10KB)
         allInsightsOutput = (allInsightsOutput + text).slice(-10000);
 
-        // Process output lines
-        const lines = text.split('\n');
+        lineBuffer += text;
+        const lines = lineBuffer.split('\n');
+        lineBuffer = lines.pop() || '';
+
         for (const line of lines) {
-          if (line.startsWith('__TASK_SUGGESTION__:')) {
-            this.handleTaskSuggestion(projectId, line, (task) => {
-              suggestedTask = task;
-            });
-          } else if (line.startsWith('__TOOL_START__:')) {
-            this.handleToolStart(projectId, line, toolsUsed);
-          } else if (line.startsWith('__TOOL_END__:')) {
-            this.handleToolEnd(projectId, line);
-          } else if (line.trim()) {
-            fullResponse += line + '\n';
-            this.emit('stream-chunk', projectId, {
-              type: 'text',
-              content: line + '\n'
-            } as InsightsStreamChunk);
-          }
+          processLine(line);
         }
       });
 
@@ -171,6 +177,10 @@ export class InsightsExecutor extends EventEmitter {
 
       proc.on('close', (code) => {
         this.activeSessions.delete(projectId);
+
+        if (lineBuffer.trim()) {
+          processLine(lineBuffer);
+        }
 
         // Cleanup temp file
         if (historyFileCreated && existsSync(historyFile)) {

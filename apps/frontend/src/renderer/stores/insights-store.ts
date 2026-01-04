@@ -39,6 +39,9 @@ interface InsightsState {
   setCurrentTool: (tool: ToolUsage | null) => void;
   addToolUsage: (tool: ToolUsage) => void;
   clearToolsUsed: () => void;
+  // Batched actions to reduce re-renders during streaming
+  handleTextChunk: (content: string) => void;
+  handleToolStart: (tool: ToolUsage) => void;
   finalizeStreamingMessage: (suggestedTask?: InsightsChatMessage['suggestedTask']) => void;
   clearSession: () => void;
   setLoadingSessions: (loading: boolean) => void;
@@ -138,6 +141,20 @@ export const useInsightsStore = create<InsightsState>((set, _get) => ({
     })),
 
   clearToolsUsed: () => set({ toolsUsed: [] }),
+
+  handleTextChunk: (content: string) =>
+    set((state) => ({
+      streamingContent: state.streamingContent + content,
+      currentTool: null,
+      status: { phase: 'streaming', message: 'Receiving response...' }
+    })),
+
+  handleToolStart: (tool: ToolUsage) =>
+    set((state) => ({
+      currentTool: tool,
+      toolsUsed: [...state.toolsUsed, { name: tool.name, input: tool.input, timestamp: new Date() }],
+      status: { phase: 'streaming', message: `Using ${tool.name}...` }
+    })),
 
   finalizeStreamingMessage: (suggestedTask) =>
     set((state) => {
@@ -349,28 +366,14 @@ export function setupInsightsListeners(): () => void {
       switch (chunk.type) {
         case 'text':
           if (chunk.content) {
-            store().appendStreamingContent(chunk.content);
-            store().setCurrentTool(null); // Clear tool when receiving text
-            store().setStatus({
-              phase: 'streaming',
-              message: 'Receiving response...'
-            });
+            store().handleTextChunk(chunk.content);
           }
           break;
         case 'tool_start':
           if (chunk.tool) {
-            store().setCurrentTool({
+            store().handleToolStart({
               name: chunk.tool.name,
               input: chunk.tool.input
-            });
-            // Record this tool usage for history
-            store().addToolUsage({
-              name: chunk.tool.name,
-              input: chunk.tool.input
-            });
-            store().setStatus({
-              phase: 'streaming',
-              message: `Using ${chunk.tool.name}...`
             });
           }
           break;

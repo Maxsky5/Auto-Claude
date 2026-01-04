@@ -108,7 +108,7 @@ async def test_run_with_sdk_enforces_auth_for_claudecode():
 
     with (
         patch.object(runners.insights_runner, "get_auth_token", return_value=None),
-        patch.object(runners.insights_runner, "run_simple") as mock_simple,
+        patch.object(runners.insights_runner, "_run_simple_fallback") as mock_simple,
     ):
         await runners.insights_runner.run_with_sdk(
             project_dir=project_dir, message=message, history=history, runtime=runtime
