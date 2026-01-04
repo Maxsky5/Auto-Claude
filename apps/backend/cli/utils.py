@@ -108,33 +108,41 @@ def find_spec(project_dir: Path, spec_identifier: str) -> Path | None:
     return None
 
 
-def validate_environment(spec_dir: Path) -> bool:
+def validate_environment(spec_dir: Path, runtime: str | None = None) -> bool:
     """
     Validate that the environment is set up correctly.
+
+    Args:
+        spec_dir: Spec directory path
+        runtime: Agent runtime being used (e.g. "opencode", "claude-code")
 
     Returns:
         True if valid, False otherwise (with error messages printed)
     """
     valid = True
 
-    # Check for OAuth token (API keys are not supported)
-    if not get_auth_token():
-        print("Error: No OAuth token found")
-        print("\nAuto Claude requires Claude Code OAuth authentication.")
-        print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
-        print("\nTo authenticate, run:")
-        print("  claude setup-token")
-        valid = False
-    else:
-        # Show which auth source is being used
-        source = get_auth_token_source()
-        if source:
-            print(f"Auth: {source}")
+    # Check for OAuth token (only required for Claude Code runtime)
+    # OpenCode handles its own authentication (or runs locally)
+    if runtime != "opencode":
+        if not get_auth_token():
+            print("Error: No OAuth token found")
+            print("\nAuto Claude requires Claude Code OAuth authentication.")
+            print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
+            print("\nTo authenticate, run:")
+            print("  claude setup-token")
+            valid = False
+        else:
+            # Show which auth source is being used
+            source = get_auth_token_source()
+            if source:
+                print(f"Auth: {source}")
 
-        # Show custom base URL if set
-        base_url = os.environ.get("ANTHROPIC_BASE_URL")
-        if base_url:
-            print(f"API Endpoint: {base_url}")
+            # Show custom base URL if set
+            base_url = os.environ.get("ANTHROPIC_BASE_URL")
+            if base_url:
+                print(f"API Endpoint: {base_url}")
+    else:
+        print("Runtime: OpenCode (skipping Claude OAuth check)")
 
     # Check for spec.md in spec directory
     spec_file = spec_dir / "spec.md"

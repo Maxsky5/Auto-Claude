@@ -90,7 +90,7 @@ def handle_qa_command(
     """
     print_banner()
     print(f"\nRunning QA validation for: {spec_dir.name}")
-    if not validate_environment(spec_dir):
+    if not validate_environment(spec_dir, runtime=runtime):
         sys.exit(1)
 
     # Check if there's pending human feedback that needs to be processed

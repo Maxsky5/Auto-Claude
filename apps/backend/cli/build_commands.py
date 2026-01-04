@@ -120,7 +120,7 @@ def handle_build_command(
     print()
 
     # Validate environment
-    if not validate_environment(spec_dir):
+    if not validate_environment(spec_dir, runtime=runtime):
         sys.exit(1)
 
     # Check human review approval
