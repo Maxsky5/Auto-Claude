@@ -189,29 +189,20 @@ class OpenCodeRuntime(AgentRuntimeBase):
             return
 
         try:
+            buffer = b""
             while True:
-                line = await self._process.stdout.readline()
+                chunk = await self._process.stdout.read(65536)
 
-                if not line:
+                if not chunk:
+                    if buffer:
+                        await self._process_line(buffer.decode())
                     break
 
-                line_str = ""
-                try:
-                    line_str = line.decode().strip()
-                    if not line_str:
-                        continue
-
-                    event = json.loads(line_str)
-                    parsed_messages = self._parse_json_event(event)
-                    for msg in parsed_messages:
+                buffer += chunk
+                while b"\n" in buffer:
+                    line, buffer = buffer.split(b"\n", 1)
+                    async for msg in self._process_line(line.decode()):
                         yield msg
-
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    if line_str and not line_str.startswith("{"):
-                        yield AgentMessage(
-                            role=MessageRole.ASSISTANT,
-                            content=[ContentBlock(type=BlockType.TEXT, text=line_str)],
-                        )
 
             await self._process.wait()
 
@@ -233,6 +224,25 @@ class OpenCodeRuntime(AgentRuntimeBase):
 
         finally:
             self._running = False
+
+    async def _process_line(self, line_str: str):
+        """Process a single line from OpenCode output."""
+        line_str = line_str.strip()
+        if not line_str:
+            return
+
+        try:
+            event = json.loads(line_str)
+            parsed_messages = self._parse_json_event(event)
+            for msg in parsed_messages:
+                yield msg
+
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            if line_str and not line_str.startswith("{"):
+                yield AgentMessage(
+                    role=MessageRole.ASSISTANT,
+                    content=[ContentBlock(type=BlockType.TEXT, text=line_str)],
+                )
 
     def _parse_json_event(self, event: dict[str, Any]) -> list[AgentMessage]:
         """
