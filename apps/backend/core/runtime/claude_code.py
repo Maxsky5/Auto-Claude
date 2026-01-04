@@ -265,3 +265,27 @@ class ClaudeCodeRuntime(AgentRuntimeBase):
         """Get the underlying SDK client (for backwards compatibility)."""
         self._ensure_initialized()
         return self._sdk_client
+
+    @staticmethod
+    def run_simple_query(prompt: str, cwd: Path, timeout: int = 120) -> str:
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["claude", "--print", "-p", prompt],
+                capture_output=True,
+                text=True,
+                cwd=str(cwd),
+                timeout=timeout,
+            )
+            if result.returncode == 0:
+                return result.stdout
+            raise RuntimeError(
+                f"Claude CLI failed with exit code {result.returncode}: {result.stderr}"
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Claude CLI timed out after {timeout}s")
+        except FileNotFoundError:
+            raise RuntimeError(
+                "Claude CLI not found. Please install: npm install -g @anthropic-ai/claude-code"
+            )

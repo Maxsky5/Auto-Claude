@@ -26,9 +26,9 @@ if env_file.exists():
 try:
     from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 
-    SDK_AVAILABLE = True
+    CLAUDE_SDK_AVAILABLE = True
 except ImportError:
-    SDK_AVAILABLE = False
+    CLAUDE_SDK_AVAILABLE = False
     ClaudeAgentOptions = None
     ClaudeSDKClient = None
 
@@ -38,8 +38,38 @@ from core.runtime import (
     RUNTIME_CHOICES,
     RuntimeType,
     create_agent_runtime,
+    get_runtime_class,
     get_runtime_config,
 )
+
+
+def _run_simple_fallback(
+    runtime_type: RuntimeType,
+    project_dir: str,
+    message: str,
+    history: list,
+) -> None:
+    system_prompt = build_system_prompt(project_dir)
+    conversation_context = ""
+    for msg in history[:-1]:
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        conversation_context += f"\n{role}: {msg['content']}\n"
+
+    full_prompt = f"{system_prompt}\n\nPrevious conversation:\n{conversation_context}\n\nUser: {message}\nAssistant:"
+
+    runtime_class = get_runtime_class(runtime_type)
+    try:
+        result = runtime_class.run_simple_query(full_prompt, Path(project_dir))
+        print(result)
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        print(
+            f"I apologize, but I encountered an issue processing your request. "
+            f"Please ensure the CLI is properly configured.\n\n"
+            f"Your question was: {message}"
+        )
+
+
 from debug import (
     debug,
     debug_detailed,
@@ -143,17 +173,18 @@ async def run_with_sdk(
     history: list,
     model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
     thinking_level: str = "medium",
-    runtime: str | None = None,
-) -> None:
+    runtime: RuntimeType = DEFAULT_RUNTIME,
+):
     """Run the chat using Claude SDK with streaming."""
-    if not SDK_AVAILABLE:
-        print("Claude SDK not available, falling back to simple mode", file=sys.stderr)
-        run_simple(project_dir, message, history)
-        return
-
     runtime_type: RuntimeType = (
         cast(RuntimeType, runtime) if runtime in RUNTIME_CHOICES else DEFAULT_RUNTIME
     )
+
+    if runtime == "claude-code" and not CLAUDE_SDK_AVAILABLE:
+        print("Claude SDK not available, falling back to simple mode", file=sys.stderr)
+        _run_simple_fallback(runtime_type, project_dir, message, history)
+        return
+
     config = get_runtime_config(runtime_type)
 
     if config.requires_auth:
@@ -162,7 +193,7 @@ async def run_with_sdk(
                 "No authentication token found, falling back to simple mode",
                 file=sys.stderr,
             )
-            run_simple(project_dir, message, history)
+            _run_simple_fallback(runtime_type, project_dir, message, history)
             return
 
         # Ensure SDK can find the token
@@ -287,68 +318,7 @@ Current question: {message}"""
 
         traceback.print_exc(file=sys.stderr)
 
-        if config.requires_auth:
-            run_simple(project_dir, message, history)
-        else:
-            print(
-                f"{config.name} execution failed. Please check if the CLI is installed and configured.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-
-def run_simple(project_dir: str, message: str, history: list) -> None:
-    """Simple fallback mode without SDK - uses subprocess to call claude CLI."""
-    import subprocess
-
-    system_prompt = build_system_prompt(project_dir)
-
-    # Build conversation context
-    conversation_context = ""
-    for msg in history[:-1]:
-        role = "User" if msg.get("role") == "user" else "Assistant"
-        conversation_context += f"\n{role}: {msg['content']}\n"
-
-    # Create the full prompt
-    full_prompt = f"""{system_prompt}
-
-Previous conversation:
-{conversation_context}
-
-User: {message}
-Assistant:"""
-
-    try:
-        # Try to use claude CLI with --print for simple output
-        result = subprocess.run(
-            ["claude", "--print", "-p", full_prompt],
-            capture_output=True,
-            text=True,
-            cwd=project_dir,
-            timeout=120,
-        )
-
-        if result.returncode == 0:
-            print(result.stdout)
-        else:
-            # Fallback response if claude CLI fails
-            print(
-                f"I apologize, but I encountered an issue processing your request. "
-                f"Please ensure Claude CLI is properly configured.\n\n"
-                f"Your question was: {message}\n\n"
-                f"Based on the project context available, I can help you with:\n"
-                f"- Understanding the codebase structure\n"
-                f"- Suggesting improvements\n"
-                f"- Planning new features\n\n"
-                f"Please try again or check your Claude CLI configuration."
-            )
-
-    except subprocess.TimeoutExpired:
-        print("Request timed out. Please try a shorter query.")
-    except FileNotFoundError:
-        print("Claude CLI not found. Please ensure it is installed and in your PATH.")
-    except Exception as e:
-        print(f"Error: {e}")
+        _run_simple_fallback(runtime_type, project_dir, message, history)
 
 
 def main():
@@ -385,7 +355,7 @@ def main():
     user_message = args.message
     model = args.model
     thinking_level = args.thinking_level
-    runtime = args.runtime
+    runtime: RuntimeType = args.runtime
 
     debug(
         "insights_runner",

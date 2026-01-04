@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import subprocess
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 from .base import AgentRuntimeBase
@@ -369,3 +370,26 @@ class OpenCodeRuntime(AgentRuntimeBase):
             return True
 
         return False
+
+    @staticmethod
+    def run_simple_query(prompt: str, cwd: Path, timeout: int = 120) -> str:
+        try:
+            result = subprocess.run(
+                ["opencode", "run", "--format", "text", prompt],
+                capture_output=True,
+                text=True,
+                cwd=str(cwd),
+                timeout=timeout,
+                env={**os.environ, "OPENCODE_NON_INTERACTIVE": "1"},
+            )
+            if result.returncode == 0:
+                return result.stdout
+            raise RuntimeError(
+                f"OpenCode CLI failed with exit code {result.returncode}: {result.stderr}"
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"OpenCode CLI timed out after {timeout}s")
+        except FileNotFoundError:
+            raise RuntimeError(
+                "OpenCode CLI not found. Please install: npm install -g opencode-ai"
+            )

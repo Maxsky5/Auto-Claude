@@ -12,14 +12,12 @@ Usage:
         project_dir=project_dir,
         spec_dir=spec_dir,
         model="claude-sonnet-4-5",
-        agent_type="coder",
+        agent_type="coder"
     )
 """
 
 import logging
-import os
 import subprocess
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +34,18 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
+RUNTIME_CLASSES: dict[RuntimeType, type[AgentRuntimeBase]] = {
+    "claude-code": ClaudeCodeRuntime,
+    "opencode": OpenCodeRuntime,
+}
+
+
+def get_runtime_class(runtime: RuntimeType) -> type[AgentRuntimeBase]:
+    runtime_class = RUNTIME_CLASSES.get(runtime)
+    if runtime_class is None:
+        raise ValueError(f"Unknown runtime type: {runtime}")
+    return runtime_class
 
 
 def _validate_runtime_installed(runtime: str) -> None:
@@ -174,26 +184,18 @@ def create_agent_runtime(
     )
 
     # Create the appropriate runtime
-    if runtime == "claude-code":
-        logger.info("Creating Claude Code runtime")
-        return ClaudeCodeRuntime(options=options, security=security)
+    runtime_class = get_runtime_class(runtime)
+    logger.info(f"Creating {runtime} runtime")
+    instance = runtime_class(options=options, security=security)
 
-    elif runtime == "opencode":
-        logger.info("Creating OpenCode runtime")
-        instance = OpenCodeRuntime(options=options, security=security)
+    if max_thinking_tokens and not instance.supports_extended_thinking():
+        logger.warning(
+            f"Extended thinking requested but runtime {runtime} does not support it. "
+            "Extended thinking will be disabled."
+        )
+        options.max_thinking_tokens = None
 
-        # Check if extended thinking is requested but not supported
-        if max_thinking_tokens and not instance.supports_extended_thinking():
-            logger.warning(
-                f"Extended thinking requested but model {model} may not support it. "
-                "Extended thinking will be disabled."
-            )
-            options.max_thinking_tokens = None
-
-        return instance
-
-    else:
-        raise ValueError(f"Unknown runtime type: {runtime}")
+    return instance
 
 
 # =============================================================================

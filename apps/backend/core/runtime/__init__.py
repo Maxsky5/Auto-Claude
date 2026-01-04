@@ -58,6 +58,7 @@ from .factory import (
     RuntimeType,
     create_agent_runtime,
     detect_available_runtimes,
+    get_runtime_class,
     get_runtime_info,
 )
 from .opencode import OpenCodeRuntime
@@ -84,6 +85,7 @@ __all__ = [
     "create_agent_runtime",
     # Factory utilities
     "detect_available_runtimes",
+    "get_runtime_class",
     "get_runtime_info",
     "get_runtime_config",
     "RuntimeType",

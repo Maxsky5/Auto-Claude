@@ -456,3 +456,141 @@ async def test_runtime_context_manager(mock_runtime_options):
         assert isinstance(r, OpenCodeRuntime)
 
     runtime.stop.assert_called_once()
+
+
+# =============================================================================
+# Tests for get_runtime_class
+# =============================================================================
+
+
+class TestGetRuntimeClass:
+    def test_get_claude_code_class(self):
+        from core.runtime.factory import get_runtime_class
+
+        runtime_class = get_runtime_class("claude-code")
+        assert runtime_class is ClaudeCodeRuntime
+
+    def test_get_opencode_class(self):
+        from core.runtime.factory import get_runtime_class
+
+        runtime_class = get_runtime_class("opencode")
+        assert runtime_class is OpenCodeRuntime
+
+    def test_unknown_runtime_raises(self):
+        from core.runtime.factory import get_runtime_class
+
+        with pytest.raises(ValueError, match="Unknown runtime type"):
+            get_runtime_class("unknown-runtime")
+
+
+# =============================================================================
+# Tests for RuntimeConfig and get_runtime_config
+# =============================================================================
+
+
+class TestRuntimeConfig:
+    def test_get_claude_code_config(self):
+        from core.runtime.types import get_runtime_config
+
+        config = get_runtime_config("claude-code")
+        assert config.id == "claude-code"
+        assert config.name == "Claude Code"
+        assert config.requires_auth is True
+        assert config.supports_thinking is True
+        assert config.has_dynamic_models is False
+        assert config.capabilities.extended_thinking is True
+        assert config.capabilities.mcp_servers is True
+        assert config.capabilities.subagents is True
+
+    def test_get_opencode_config(self):
+        from core.runtime.types import get_runtime_config
+
+        config = get_runtime_config("opencode")
+        assert config.id == "opencode"
+        assert config.name == "OpenCode"
+        assert config.requires_auth is False
+        assert config.supports_thinking is False
+        assert config.has_dynamic_models is True
+        assert config.capabilities.extended_thinking is False
+        assert config.capabilities.mcp_servers is True
+        assert config.capabilities.subagents is False
+
+    def test_unknown_runtime_returns_default(self):
+        from core.runtime.types import get_runtime_config, DEFAULT_RUNTIME
+
+        config = get_runtime_config("unknown")
+        default_config = get_runtime_config(DEFAULT_RUNTIME)
+        assert config.id == default_config.id
+
+
+# =============================================================================
+# Tests for run_simple_query
+# =============================================================================
+
+
+class TestRunSimpleQuery:
+    @patch("subprocess.run")
+    def test_claude_code_run_simple_query_success(self, mock_run, tmp_path):
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "Hello from Claude"
+
+        result = ClaudeCodeRuntime.run_simple_query("test prompt", tmp_path)
+
+        assert result == "Hello from Claude"
+        mock_run.assert_called_once()
+        args = mock_run.call_args
+        assert args[0][0] == ["claude", "--print", "-p", "test prompt"]
+        assert args[1]["cwd"] == str(tmp_path)
+
+    @patch("subprocess.run")
+    def test_claude_code_run_simple_query_failure(self, mock_run, tmp_path):
+        mock_run.return_value.returncode = 1
+        mock_run.return_value.stderr = "Command failed"
+
+        with pytest.raises(RuntimeError, match="Claude CLI failed"):
+            ClaudeCodeRuntime.run_simple_query("test prompt", tmp_path)
+
+    @patch("subprocess.run")
+    def test_claude_code_run_simple_query_not_found(self, mock_run, tmp_path):
+        mock_run.side_effect = FileNotFoundError()
+
+        with pytest.raises(RuntimeError, match="Claude CLI not found"):
+            ClaudeCodeRuntime.run_simple_query("test prompt", tmp_path)
+
+    @patch("subprocess.run")
+    def test_claude_code_run_simple_query_timeout(self, mock_run, tmp_path):
+        import subprocess
+
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="claude", timeout=120)
+
+        with pytest.raises(RuntimeError, match="timed out"):
+            ClaudeCodeRuntime.run_simple_query("test prompt", tmp_path)
+
+    @patch("subprocess.run")
+    def test_opencode_run_simple_query_success(self, mock_run, tmp_path):
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "Hello from OpenCode"
+
+        result = OpenCodeRuntime.run_simple_query("test prompt", tmp_path)
+
+        assert result == "Hello from OpenCode"
+        mock_run.assert_called_once()
+        args = mock_run.call_args
+        assert "opencode" in args[0][0]
+        assert "run" in args[0][0]
+        assert args[1]["cwd"] == str(tmp_path)
+
+    @patch("subprocess.run")
+    def test_opencode_run_simple_query_failure(self, mock_run, tmp_path):
+        mock_run.return_value.returncode = 1
+        mock_run.return_value.stderr = "Command failed"
+
+        with pytest.raises(RuntimeError, match="OpenCode CLI failed"):
+            OpenCodeRuntime.run_simple_query("test prompt", tmp_path)
+
+    @patch("subprocess.run")
+    def test_opencode_run_simple_query_not_found(self, mock_run, tmp_path):
+        mock_run.side_effect = FileNotFoundError()
+
+        with pytest.raises(RuntimeError, match="OpenCode CLI not found"):
+            OpenCodeRuntime.run_simple_query("test prompt", tmp_path)

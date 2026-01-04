@@ -296,3 +296,27 @@ class AgentRuntimeBase(ABC):
             List of model info dicts with at least 'id' and 'provider' keys
         """
         return []
+
+    @staticmethod
+    def run_simple_query(prompt: str, cwd: Path, timeout: int = 120) -> str:
+        """
+        Run a simple one-shot query using the runtime's CLI.
+
+        This is a synchronous fallback method for when the full async
+        runtime fails or isn't available. Each runtime implementation
+        should use its own CLI tool.
+
+        Args:
+            prompt: The prompt to send
+            cwd: Working directory for the command
+            timeout: Timeout in seconds (default: 120)
+
+        Returns:
+            The response text from the CLI
+
+        Raises:
+            RuntimeError: If the CLI is not available or query fails
+        """
+        raise NotImplementedError(
+            "Subclasses must implement run_simple_query() for CLI fallback support"
+        )
