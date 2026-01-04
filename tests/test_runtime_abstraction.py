@@ -362,19 +362,19 @@ class TestGetRuntimeInfo:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "1.0.0"
         info = get_runtime_info("claude-code")
-        assert info["type"] == "claude-code"
-        assert info["available"] is True
-        assert info["features"]["extended_thinking"] is True
-        assert info["features"]["mcp_servers"] is True
+        assert info.config.id == "claude-code"
+        assert info.available is True
+        assert info.config.capabilities.extended_thinking is True
+        assert info.config.capabilities.mcp_servers is True
 
     @patch("subprocess.run")
     def test_opencode_info(self, mock_run):
         """Test getting OpenCode runtime info."""
         mock_run.return_value.returncode = 0
         info = get_runtime_info("opencode")
-        assert info["type"] == "opencode"
-        assert info["available"] is True
-        assert info["features"]["extended_thinking"] is False
+        assert info.config.id == "opencode"
+        assert info.available is True
+        assert info.config.capabilities.extended_thinking is False
 
 
 # =============================================================================

@@ -11,6 +11,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 # Add auto-claude to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -32,7 +33,13 @@ except ImportError:
     ClaudeSDKClient = None
 
 from core.auth import ensure_claude_code_oauth_token, get_auth_token
-from core.runtime import DEFAULT_RUNTIME, create_agent_runtime
+from core.runtime import (
+    DEFAULT_RUNTIME,
+    RUNTIME_CHOICES,
+    RuntimeType,
+    create_agent_runtime,
+    get_runtime_config,
+)
 from debug import (
     debug,
     debug_detailed,
@@ -144,9 +151,12 @@ async def run_with_sdk(
         run_simple(project_dir, message, history)
         return
 
-    # Check auth only if using Claude Code runtime
-    is_opencode = runtime == "opencode"
-    if not is_opencode:
+    runtime_type: RuntimeType = (
+        cast(RuntimeType, runtime) if runtime in RUNTIME_CHOICES else DEFAULT_RUNTIME
+    )
+    config = get_runtime_config(runtime_type)
+
+    if config.requires_auth:
         if not get_auth_token():
             print(
                 "No authentication token found, falling back to simple mode",
@@ -192,9 +202,9 @@ Current question: {message}"""
                 model=model,
                 agent_type="coder",  # Use coder permissions for insights (broad access)
                 max_thinking_tokens=None,  # Configured via model parameter usually
-                runtime=runtime or DEFAULT_RUNTIME,
+                runtime=runtime_type,
             )
-            debug("insights_runner", "Client created", runtime=runtime)
+            debug("insights_runner", "Client created", runtime=runtime_type)
         except Exception as e:
             print(
                 f"[ERROR] insights_runner: Failed to create backend: {e}",
@@ -277,13 +287,11 @@ Current question: {message}"""
 
         traceback.print_exc(file=sys.stderr)
 
-        # Only fallback to simple mode (Claude CLI) if we were trying to use Claude Code
-        # If we were using OpenCode and it failed, falling back to Claude CLI is unexpected/confusing
-        if runtime != "opencode":
+        if config.requires_auth:
             run_simple(project_dir, message, history)
         else:
             print(
-                "OpenCode execution failed. Please check if 'opencode' CLI is installed and configured.",
+                f"{config.name} execution failed. Please check if the CLI is installed and configured.",
                 file=sys.stderr,
             )
             sys.exit(1)

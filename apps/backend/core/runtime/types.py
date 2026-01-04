@@ -154,6 +154,70 @@ class RuntimeCapabilities:
 
 
 @dataclass
+class RuntimeConfig:
+    """Static configuration for a runtime (mirrors frontend RuntimeConfig)."""
+
+    id: RuntimeType
+    name: str
+    has_dynamic_models: bool
+    supports_thinking: bool
+    requires_auth: bool
+    model_prefix: str
+    fast_model: str
+    capabilities: RuntimeCapabilities = field(default_factory=RuntimeCapabilities)
+
+
+RUNTIME_CONFIGS: dict[RuntimeType, RuntimeConfig] = {
+    "claude-code": RuntimeConfig(
+        id="claude-code",
+        name="Claude Code",
+        has_dynamic_models=False,
+        supports_thinking=True,
+        requires_auth=True,
+        model_prefix="",
+        fast_model="claude-haiku-4-5",
+        capabilities=RuntimeCapabilities(
+            extended_thinking=True,
+            mcp_servers=True,
+            subagents=True,
+            structured_output=True,
+        ),
+    ),
+    "opencode": RuntimeConfig(
+        id="opencode",
+        name="OpenCode",
+        has_dynamic_models=True,
+        supports_thinking=False,
+        requires_auth=False,
+        model_prefix="anthropic/",
+        fast_model="opencode/grok-code",
+        capabilities=RuntimeCapabilities(
+            extended_thinking=False,
+            mcp_servers=True,
+            subagents=False,
+            structured_output=True,
+        ),
+    ),
+}
+
+
+def get_runtime_config(runtime: RuntimeType) -> RuntimeConfig:
+    """Get static configuration for a runtime."""
+    return RUNTIME_CONFIGS.get(runtime, RUNTIME_CONFIGS[DEFAULT_RUNTIME])
+
+
+@dataclass
+class RuntimeInfo:
+    """Runtime information including static config and dynamic availability."""
+
+    config: RuntimeConfig
+    available: bool = False
+    version: str | None = None
+    models: list[dict[str, Any]] = field(default_factory=list)
+    providers: list[str] = field(default_factory=list)
+
+
+@dataclass
 class RuntimeOptions:
     """
     Unified options for configuring an agent runtime.

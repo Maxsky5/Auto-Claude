@@ -64,8 +64,11 @@ from .opencode import OpenCodeRuntime
 from .types import (
     DEFAULT_RUNTIME,
     RUNTIME_CHOICES,
+    RUNTIME_CONFIGS,
     AgentMessage,
     RuntimeCapabilities,
+    RuntimeConfig,
+    RuntimeInfo,
     RuntimeOptions,
     BlockType,
     ContentBlock,
@@ -73,6 +76,7 @@ from .types import (
     MessageRole,
     SecurityConfig,
     SecurityHook,
+    get_runtime_config,
 )
 
 __all__ = [
@@ -81,9 +85,11 @@ __all__ = [
     # Factory utilities
     "detect_available_runtimes",
     "get_runtime_info",
+    "get_runtime_config",
     "RuntimeType",
     "DEFAULT_RUNTIME",
     "RUNTIME_CHOICES",
+    "RUNTIME_CONFIGS",
     # Base class (THE type to use for annotations)
     "AgentRuntimeBase",
     # Implementations (rarely needed directly)
@@ -92,6 +98,8 @@ __all__ = [
     # Types
     "AgentMessage",
     "RuntimeCapabilities",
+    "RuntimeConfig",
+    "RuntimeInfo",
     "RuntimeOptions",
     "BlockType",
     "ContentBlock",

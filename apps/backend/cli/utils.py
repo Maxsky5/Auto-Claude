@@ -8,6 +8,7 @@ Shared utility functions for the Auto Claude CLI.
 import os
 import sys
 from pathlib import Path
+from typing import cast
 
 # Ensure parent directory is in path for imports (before other imports)
 _PARENT_DIR = Path(__file__).parent.parent
@@ -15,6 +16,12 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 from core.auth import get_auth_token, get_auth_token_source
+from core.runtime import (
+    DEFAULT_RUNTIME,
+    RUNTIME_CHOICES,
+    RuntimeType,
+    get_runtime_config,
+)
 from dotenv import load_dotenv
 from graphiti_config import get_graphiti_status
 from linear_integration import LinearManager
@@ -121,9 +128,12 @@ def validate_environment(spec_dir: Path, runtime: str | None = None) -> bool:
     """
     valid = True
 
-    # Check for OAuth token (only required for Claude Code runtime)
-    # OpenCode handles its own authentication (or runs locally)
-    if runtime != "opencode":
+    runtime_type: RuntimeType = (
+        cast(RuntimeType, runtime) if runtime in RUNTIME_CHOICES else DEFAULT_RUNTIME
+    )
+    config = get_runtime_config(runtime_type)
+
+    if config.requires_auth:
         if not get_auth_token():
             print("Error: No OAuth token found")
             print("\nAuto Claude requires Claude Code OAuth authentication.")
@@ -142,7 +152,7 @@ def validate_environment(spec_dir: Path, runtime: str | None = None) -> bool:
             if base_url:
                 print(f"API Endpoint: {base_url}")
     else:
-        print("Runtime: OpenCode (skipping Claude OAuth check)")
+        print(f"Runtime: {config.name} (no OAuth required)")
 
     # Check for spec.md in spec directory
     spec_file = spec_dir / "spec.md"

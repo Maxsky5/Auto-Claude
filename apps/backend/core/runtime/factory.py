@@ -27,11 +27,12 @@ from .base import AgentRuntimeBase
 from .claude_code import ClaudeCodeRuntime
 from .opencode import OpenCodeRuntime
 from .types import (
-    RuntimeCapabilities,
+    DEFAULT_RUNTIME,
+    RuntimeInfo,
     RuntimeOptions,
     RuntimeType,
-    DEFAULT_RUNTIME,
     SecurityConfig,
+    get_runtime_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -200,22 +201,18 @@ def create_agent_runtime(
 # =============================================================================
 
 
-def get_runtime_info(runtime: RuntimeType = DEFAULT_RUNTIME) -> dict[str, Any]:
+def get_runtime_info(runtime: RuntimeType = DEFAULT_RUNTIME) -> RuntimeInfo:
     """
-    Get information about a runtime.
+    Get information about a runtime including static config and dynamic availability.
 
     Args:
         runtime: Runtime type to get info for
 
     Returns:
-        Dict with runtime information (name, version, available models, etc.)
+        RuntimeInfo with config, availability, version, and models
     """
-    info: dict[str, Any] = {
-        "type": runtime,
-        "available": False,
-        "models": [],
-        "features": {},
-    }
+    config = get_runtime_config(runtime)
+    info = RuntimeInfo(config=config)
 
     if runtime == "claude-code":
         try:
@@ -226,39 +223,15 @@ def get_runtime_info(runtime: RuntimeType = DEFAULT_RUNTIME) -> dict[str, Any]:
                 timeout=5,
             )
             if result.returncode == 0:
-                info["available"] = True
-                info["version"] = result.stdout.strip()
-                info["capabilities"] = RuntimeCapabilities(
-                    extended_thinking=True,
-                    mcp_servers=True,
-                    subagents=True,
-                    structured_output=True,
-                )
-                info["features"] = {
-                    "extended_thinking": True,
-                    "mcp_servers": True,
-                    "subagents": True,
-                    "structured_output": True,
-                }
+                info.available = True
+                info.version = result.stdout.strip()
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
     elif runtime == "opencode":
         if OpenCodeRuntime.is_available():
-            info["available"] = True
-            info["models"] = OpenCodeRuntime.get_available_models()
-            info["providers"] = OpenCodeRuntime.get_model_providers()
-            info["capabilities"] = RuntimeCapabilities(
-                extended_thinking=False,  # Only for Claude models
-                mcp_servers=True,
-                subagents=False,  # Not implemented yet
-                structured_output=True,
-            )
-            info["features"] = {
-                "extended_thinking": False,
-                "mcp_servers": True,
-                "subagents": False,
-                "structured_output": True,
-            }
+            info.available = True
+            info.models = OpenCodeRuntime.get_available_models()
+            info.providers = OpenCodeRuntime.get_model_providers()
 
     return info
