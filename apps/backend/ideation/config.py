@@ -29,6 +29,7 @@ class IdeationConfigManager:
         thinking_level: str = "medium",
         refresh: bool = False,
         append: bool = False,
+        runtime: str | None = None,
     ):
         """Initialize configuration manager.
 
@@ -43,6 +44,7 @@ class IdeationConfigManager:
             thinking_level: Thinking level for extended reasoning
             refresh: Force regeneration of existing files
             append: Preserve existing ideas when merging
+            runtime: Agent runtime to use (claude-code or opencode)
         """
         self.project_dir = Path(project_dir)
         self.model = model
@@ -53,6 +55,7 @@ class IdeationConfigManager:
         self.include_roadmap_context = include_roadmap_context
         self.include_kanban_context = include_kanban_context
         self.max_ideas_per_type = max_ideas_per_type
+        self.runtime = runtime
 
         # Setup output directory
         self.output_dir = self._setup_output_dir(output_dir)
@@ -64,6 +67,7 @@ class IdeationConfigManager:
             self.model,
             self.thinking_level,
             self.max_ideas_per_type,
+            self.runtime,
         )
         self.analyzer = ProjectAnalyzer(
             self.project_dir,

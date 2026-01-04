@@ -114,6 +114,13 @@ def main():
         action="store_true",
         help="Append new ideas to existing session instead of replacing",
     )
+    parser.add_argument(
+        "--runtime",
+        type=str,
+        default=None,
+        choices=["claude-code", "opencode"],
+        help="Agent runtime to use (default: claude-code)",
+    )
 
     args = parser.parse_args()
 
@@ -144,6 +151,7 @@ def main():
         thinking_level=args.thinking_level,
         refresh=args.refresh,
         append=args.append,
+        runtime=args.runtime,
     )
 
     try:

@@ -59,6 +59,7 @@ class IdeationGenerator:
         model: str = "opus",
         thinking_level: str = "medium",
         max_ideas_per_type: int = 5,
+        runtime: str | None = None,
     ):
         self.project_dir = Path(project_dir)
         self.output_dir = Path(output_dir)
@@ -67,6 +68,7 @@ class IdeationGenerator:
         self.thinking_budget = get_thinking_budget(thinking_level)
         self.max_ideas_per_type = max_ideas_per_type
         self.prompts_dir = Path(__file__).parent.parent / "prompts"
+        self.runtime = runtime
 
     async def run_agent(
         self,
@@ -96,6 +98,7 @@ class IdeationGenerator:
             spec_dir=self.output_dir,
             model=self.model,
             max_thinking_tokens=self.thinking_budget,
+            runtime=self.runtime,
         )
 
         try:
@@ -186,6 +189,7 @@ Write the fixed JSON to the file now.
             spec_dir=self.output_dir,
             model=self.model,
             max_thinking_tokens=self.thinking_budget,
+            runtime=self.runtime,
         )
 
         try:
