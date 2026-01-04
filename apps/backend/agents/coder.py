@@ -267,10 +267,6 @@ async def run_autonomous_agent(
             max_thinking_tokens=phase_thinking_budget,
             runtime=runtime,
         )
-            agent_type="planner" if first_run else "coder",
-            max_thinking_tokens=phase_thinking_budget,
-            runtime=runtime,
-        )
 
         # Generate appropriate prompt
         if first_run:
