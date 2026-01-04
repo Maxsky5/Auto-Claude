@@ -439,9 +439,12 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
             if not deps_satisfied:
                 continue
 
-            # Find first pending subtask in this phase
+            # Find first pending or in_progress subtask in this phase
+            # Include in_progress to resume interrupted builds
+            # Treat missing status as pending (new subtasks may not have status set)
             for subtask in phase.get("subtasks", []):
-                if subtask.get("status") == "pending":
+                status = subtask.get("status", "pending")
+                if status in ("pending", "in_progress"):
                     return {
                         "phase_id": phase_id,
                         "phase_name": phase.get("name"),
